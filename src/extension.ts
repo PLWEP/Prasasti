@@ -3,9 +3,17 @@ import * as path from "path";
 import { PrasastiProvider, PrasastiDataManager } from "./issueProvider";
 import { runAiScriptForFile } from "./fixService";
 
+const logger = vscode.window.createOutputChannel("Prasasti Debug");
+
 export function activate(context: vscode.ExtensionContext) {
+	logger.appendLine(
+		`[${new Date().toLocaleTimeString()}] Extension Activated.`
+	);
+
 	const dataManager = PrasastiDataManager.getInstance();
 	dataManager.setContext(context.workspaceState);
+
+	dataManager.setLogger(logger);
 
 	const problemProvider = new PrasastiProvider();
 
@@ -91,7 +99,13 @@ export function activate(context: vscode.ExtensionContext) {
 									wsFolder.uri.fsPath,
 									apiKey
 								);
+								logger.appendLine(
+									`[SUCCESS] Generated: ${item.label}`
+								);
 							} catch (e: any) {
+								logger.appendLine(
+									`[ERROR] FixAll: ${e.message}`
+								);
 								vscode.window.showErrorMessage(
 									`Failed ${item.label}: ${e.message}`
 								);

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { readedFile, DocStatus } from "./viewService";
+import { OutputChannel } from "vscode";
 
 export class PrasastiDataManager {
 	private static instance: PrasastiDataManager;
@@ -21,10 +22,18 @@ export class PrasastiDataManager {
 		this.globalState = state;
 	}
 
+	private logger?: OutputChannel; // Variable logger
+
+	public setLogger(log: OutputChannel) {
+		this.logger = log;
+	}
+
 	public async scanWorkspace() {
 		if (!this.globalState) {
 			return;
 		}
+
+		this.logger?.appendLine(`[SCAN] Starting scan...`);
 
 		const config = vscode.workspace.getConfiguration("prasasti");
 		const filePattern =
@@ -46,9 +55,14 @@ export class PrasastiDataManager {
 			const result = await readedFile(
 				uri.fsPath,
 				workspaceFolder.uri.fsPath,
-				this.globalState
+				this.globalState,
+				this.logger
 			);
+
 			const fileName = path.basename(uri.fsPath);
+			if (result.status === DocStatus.UNKNOWN) {
+				this.logger?.appendLine(`[SKIP] ${fileName}: ${result.reason}`);
+			}
 
 			if (result.status === DocStatus.NO_HEADER) {
 				tempItems.push(
@@ -89,6 +103,9 @@ export class PrasastiDataManager {
 		});
 
 		this.problemItems = tempItems;
+		this.logger?.appendLine(
+			`[SCAN] Finished. Found ${this.problemItems.length} issues.`
+		);
 		this.onDidChangeData.fire();
 	}
 
