@@ -2,7 +2,12 @@
 	"name": "prasasti",
 	"displayName": "Prasasti",
 	"description": "Automate source code documentation using AI.",
-	"version": "0.0.1",
+	"version": "1.0.0",
+	"publisher": "PLWEP",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/PLWEP/prasasti"
+	},
 	"engines": {
 		"vscode": "^1.106.0"
 	},
