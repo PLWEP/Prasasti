@@ -212,6 +212,8 @@ RULES:
 
 4. **NO LOGIC CHANGES:** Return the code logic exactly as is. Only add/format comments.
 5. OUTPUT: Return ONLY the full valid PL/SQL code. Do not use Markdown code blocks (\`\`\`sql).
+6. DONT REMOVE $ IN THE CODE. ($SEARCH, $TEXTSEARCH, $APPEND, $', ETC.)
+7. DONT ADD PROMPT IN THE VIEW.
 
 FORENSIC GIT HISTORY for '{{FILENAME}}':
 {{FORENSIC_DATA}}
