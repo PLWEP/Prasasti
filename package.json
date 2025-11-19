@@ -79,6 +79,16 @@
 					"type": "number",
 					"default": 3,
 					"description": "Jumlah percobaan ulang jika Gemini API terkena Rate Limit (429)."
+				},
+				"prasasti.skipDocKeywords": {
+					"type": "array",
+					"default": [
+						"Documented",
+						"Documentation",
+						"DOCS",
+						"Docs Only"
+					],
+					"description": "List of keywords in the last commit message to treat as 'Documentation Update Only', bypassing the outdated check."
 				}
 			}
 		},

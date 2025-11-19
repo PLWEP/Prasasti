@@ -37,7 +37,8 @@ export class PrasastiDataManager {
 
 		const config = vscode.workspace.getConfiguration("prasasti");
 		const filePattern =
-			config.get<string>("includedFiles") || "**/*.{plsql,apv,apy,sql}";
+			config.get<string>("includedFiles") || "**/*.{plsql,plsvc}";
+		const skipKeywords = config.get<string[]>("skipDocKeywords"); // <-- AMBIL KONFIGURASI BARU
 		const files = await vscode.workspace.findFiles(
 			filePattern,
 			"**/node_modules/**"
@@ -56,7 +57,8 @@ export class PrasastiDataManager {
 				uri.fsPath,
 				workspaceFolder.uri.fsPath,
 				this.globalState,
-				this.logger
+				this.logger,
+				skipKeywords
 			);
 
 			const fileName = path.basename(uri.fsPath);

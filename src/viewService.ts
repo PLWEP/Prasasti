@@ -51,7 +51,8 @@ export async function readedFile(
 	filePath: string,
 	workspaceRoot: string,
 	cacheState: vscode.Memento,
-	logger?: vscode.OutputChannel
+	logger?: vscode.OutputChannel,
+	skipKeywords?: string[]
 ): Promise<AuditResult> {
 	try {
 		let isDirty = false;
@@ -86,7 +87,7 @@ export async function readedFile(
 			[
 				"log",
 				"-1",
-				"--format=%H|%ad",
+				"--format=%H|%ad|%s",
 				"--date=format:%y%m%d",
 				"--",
 				filePath,
@@ -98,7 +99,7 @@ export async function readedFile(
 			return { status: DocStatus.UNKNOWN, reason: "Untracked file" };
 		}
 
-		const [currentHash, gitDateStr] = output.split("|");
+		const [currentHash, gitDateStr, commitSubject] = output.split("|");
 
 		const cacheKey = `prasasti.cache.${filePath}`;
 		if (!isDirty) {
@@ -130,22 +131,45 @@ export async function readedFile(
 		} else if (headerDateInt >= gitDateInt) {
 			result = { status: DocStatus.SUCCESS, reason: "Up to date" };
 		} else {
-			const isJustDocs = await checkLastCommitIsDocsOnly(
-				currentHash,
-				filePath,
-				workspaceRoot
-			);
+			let shouldSkip = false;
+			const subjectUpper = commitSubject
+				? commitSubject.toUpperCase()
+				: "";
 
-			if (isJustDocs) {
+			if (skipKeywords && skipKeywords.length > 0) {
+				shouldSkip = skipKeywords.some((keyword) =>
+					subjectUpper.includes(keyword.toUpperCase())
+				);
+			}
+
+			if (shouldSkip) {
 				result = {
 					status: DocStatus.SUCCESS,
-					reason: "Latest commit was docs update only",
+					reason: `Skipped by commit message: ${commitSubject}`,
 				};
+				logger?.appendLine(
+					`[SKIP-MSG] ${path.basename(
+						filePath
+					)} skipped due to keyword in commit.`
+				);
 			} else {
-				result = {
-					status: DocStatus.OUTDATED,
-					reason: `Outdated (H:${headerDateInt} < G:${gitDateInt})`,
-				};
+				const isJustDocs = await checkLastCommitIsDocsOnly(
+					currentHash,
+					filePath,
+					workspaceRoot
+				);
+
+				if (isJustDocs) {
+					result = {
+						status: DocStatus.SUCCESS,
+						reason: "Latest commit was internal docs update only",
+					};
+				} else {
+					result = {
+						status: DocStatus.OUTDATED,
+						reason: `Outdated (H:${headerDateInt} < G:${gitDateInt})`,
+					};
+				}
 			}
 		}
 
@@ -200,6 +224,33 @@ async function checkLastCommitIsDocsOnly(
 function parseDiffForCode(diffText: string): boolean {
 	const lines = diffText.split("\n");
 
+	const SAFE_KEYWORDS = [
+		"CURSOR",
+		"IS",
+		"BEGIN",
+		"END",
+		"IF",
+		"THEN",
+		"ELSE",
+		"ELSIF",
+		"FOR",
+		"LOOP",
+		"NULL",
+		"RETURN",
+		"EXCEPTION",
+		"WHEN",
+		"FUNCTION",
+		"PROCEDURE",
+		"AS",
+		"CONSTANT",
+		"TYPE",
+	];
+
+	const structuralRegex = new RegExp(
+		`^\\s*(${SAFE_KEYWORDS.join("|")})(\\s|;|$|\\()`,
+		"i"
+	);
+
 	for (const line of lines) {
 		if (
 			line.startsWith("---") ||
@@ -217,9 +268,15 @@ function parseDiffForCode(diffText: string): boolean {
 				continue;
 			}
 
-			if (!content.startsWith("--")) {
-				return true;
+			if (content.startsWith("--")) {
+				continue;
 			}
+
+			if (content.match(structuralRegex)) {
+				continue;
+			}
+
+			return true;
 		}
 	}
 
