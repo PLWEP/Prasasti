@@ -132,48 +132,58 @@ export async function readedFile(
 			result = { status: DocStatus.SUCCESS, reason: "Up to date" };
 		} else {
 			let shouldSkip = false;
+
 			const subjectUpper = commitSubject
 				? commitSubject.toUpperCase()
 				: "";
-
 			if (skipKeywords && skipKeywords.length > 0) {
 				shouldSkip = skipKeywords.some((keyword) =>
 					subjectUpper.includes(keyword.toUpperCase())
 				);
 			}
 
-			if (shouldSkip) {
-				result = {
-					status: DocStatus.SUCCESS,
-					reason: `Skipped by commit message: ${commitSubject}`,
-				};
-				logger?.appendLine(
-					`[SKIP-MSG] ${path.basename(
-						filePath
-					)} skipped due to keyword in commit.`
-				);
-			} else {
+			if (!shouldSkip) {
 				const isJustDocs = await checkLastCommitIsDocsOnly(
 					currentHash,
 					filePath,
 					workspaceRoot
 				);
-
 				if (isJustDocs) {
-					result = {
-						status: DocStatus.SUCCESS,
-						reason: "Latest commit was internal docs update only",
-					};
-				} else {
-					result = {
-						status: DocStatus.OUTDATED,
-						reason: `Outdated (H:${headerDateInt} < G:${gitDateInt})`,
-					};
+					shouldSkip = true;
 				}
+			}
+
+			if (shouldSkip) {
+				result = {
+					status: DocStatus.SUCCESS,
+					reason: `Skipped: Commit considered documentation update.`,
+				};
+				logger?.appendLine(
+					`[SKIP] ${path.basename(
+						filePath
+					)} deemed safe (Docs-Only/Keyword).`
+				);
+			} else {
+				result = {
+					status: DocStatus.OUTDATED,
+					reason: `Outdated (H:${headerDateInt} < G:${gitDateInt})`,
+				};
 			}
 		}
 
-		if (!isDirty) {
+		let isWorkingTreeDirty = false;
+		try {
+			await gitSpawn(
+				["diff", "--quiet", "HEAD", "--", filePath],
+				workspaceRoot
+			);
+		} catch (e: any) {
+			if (e.code === 1) {
+				isWorkingTreeDirty = true;
+			}
+		}
+
+		if (!isWorkingTreeDirty) {
 			cacheState.update(cacheKey, {
 				lastHash: currentHash,
 				result: result,

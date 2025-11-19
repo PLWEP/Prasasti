@@ -212,8 +212,10 @@ RULES:
 
 4. **NO LOGIC CHANGES:** Return the code logic exactly as is. Only add/format comments.
 5. OUTPUT: Return ONLY the full valid PL/SQL code. Do not use Markdown code blocks (\`\`\`sql).
-6. DONT REMOVE $ IN THE CODE. ($SEARCH, $TEXTSEARCH, $APPEND, $', ETC.)
+6. PRESERVE SYNTAX: DO NOT remove any special characters used for PL/SQL functions or variables, including the dollar sign ($), ampersand (&), and pipe (|).
 7. DONT ADD PROMPT IN THE VIEW.
+8. CRITICAL: The string '$SEARCH' and any text after that must remain intact.
+9. IMPORTANT: Do not delete any system-level logging calls, including any function starting with 'Log_Sys.' or 'Dbms_Output'. These are required system functions.
 
 FORENSIC GIT HISTORY for '{{FILENAME}}':
 {{FORENSIC_DATA}}
