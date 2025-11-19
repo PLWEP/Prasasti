@@ -65,9 +65,14 @@
 					"default": "**/*.{plsql,plsvc,views}",
 					"description": "Glob pattern untuk file (contoh: **/*.{plsql,svc})"
 				},
+				"prasasti.geminiModel": {
+					"type": "string",
+					"default": "gemini-1.5-flash",
+					"description": "Nama model Gemini yang digunakan untuk generate dokumentasi (misalnya: gemini-1.5-flash atau gemini-2.5-flash)."
+				},
 				"prasasti.apiKey": {
 					"type": "string",
-					"default": "AIzaSyA3JtC_qVdSsVjzgtTwq6oR02Ws_Y5x2CI",
+					"default": "",
 					"description": "Google Gemini API Key untuk auto-documentation."
 				},
 				"prasasti.autoApply": {

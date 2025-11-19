@@ -13,7 +13,7 @@ export async function runAiScriptForFile(
 	apiKey: string
 ): Promise<void> {
 	const config = vscode.workspace.getConfiguration("prasasti");
-	const model = "gemini-2.5-flash";
+	const model = config.get<string>("geminiModel") || "gemini-2.5-flash";
 	const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 	const headers = {
 		"x-goog-api-key": apiKey,

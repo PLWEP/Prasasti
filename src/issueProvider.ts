@@ -94,14 +94,25 @@ export class PrasastiDataManager {
 			await Promise.all(chunk.map((uri) => processFile(uri)));
 		}
 
-		tempItems.sort((a, b) => {
-			if (a.type === "error" && b.type !== "error") {
-				return -1;
+		const getStatusScore = (type: string) => {
+			if (type === "dirty") {
+				return 0;
 			}
-			if (a.type !== "error" && b.type === "error") {
+			if (type === "error") {
 				return 1;
 			}
-			return 0;
+			return 2;
+		};
+
+		tempItems.sort((a, b) => {
+			const scoreA = getStatusScore(a.type);
+			const scoreB = getStatusScore(b.type);
+
+			if (scoreA !== scoreB) {
+				return scoreA - scoreB;
+			}
+
+			return a.label.localeCompare(b.label);
 		});
 
 		this.problemItems = tempItems;
