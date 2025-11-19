@@ -63,6 +63,22 @@ export async function readedFile(
 		} catch (err: any) {
 			if (err.code === 1) {
 				isDirty = true;
+				const dirtyIsCode = await checkDiffIsCode(
+					filePath,
+					workspaceRoot,
+					true
+				);
+				if (dirtyIsCode) {
+					return {
+						status: DocStatus.DIRTY_CODE,
+						reason: "Unsaved Logic Changes",
+					};
+				} else {
+					return {
+						status: DocStatus.SUCCESS,
+						reason: "Writing docs...",
+					};
+				}
 			}
 		}
 
@@ -85,7 +101,6 @@ export async function readedFile(
 		const [currentHash, gitDateStr] = output.split("|");
 
 		const cacheKey = `prasasti.cache.${filePath}`;
-
 		if (!isDirty) {
 			const cachedData = cacheState.get<FileCache>(cacheKey);
 			if (cachedData && cachedData.lastHash === currentHash) {
@@ -112,17 +127,26 @@ export async function readedFile(
 				status: DocStatus.NO_HEADER,
 				reason: "Header Regex not matched",
 			};
-			logger?.appendLine(
-				`[FAIL] Regex failed for ${path.basename(filePath)}`
-			);
 		} else if (headerDateInt >= gitDateInt) {
 			result = { status: DocStatus.SUCCESS, reason: "Up to date" };
 		} else {
-			result = {
-				status: DocStatus.OUTDATED,
-				reason: `Header (${headerDateInt}) < Git (${gitDateInt})`,
-			};
-			logger?.appendLine(`[OUTDATED] ${path.basename(filePath)}`);
+			const isJustDocs = await checkLastCommitIsDocsOnly(
+				currentHash,
+				filePath,
+				workspaceRoot
+			);
+
+			if (isJustDocs) {
+				result = {
+					status: DocStatus.SUCCESS,
+					reason: "Latest commit was docs update only",
+				};
+			} else {
+				result = {
+					status: DocStatus.OUTDATED,
+					reason: `Outdated (H:${headerDateInt} < G:${gitDateInt})`,
+				};
+			}
 		}
 
 		if (!isDirty) {
@@ -136,4 +160,68 @@ export async function readedFile(
 	} catch (e: any) {
 		return { status: DocStatus.UNKNOWN, reason: `Exception: ${e.message}` };
 	}
+}
+
+async function checkDiffIsCode(
+	filePath: string,
+	root: string,
+	isDirtyCheck: boolean
+): Promise<boolean> {
+	try {
+		const args = isDirtyCheck
+			? ["diff", "-U0", "HEAD", "--", filePath]
+			: ["show", "--format=", "-U0", "HEAD", "--", filePath];
+
+		const stdout = await gitSpawn(args, root);
+		return parseDiffForCode(stdout);
+	} catch (e) {
+		return true;
+	}
+}
+
+async function checkLastCommitIsDocsOnly(
+	hash: string,
+	filePath: string,
+	root: string
+): Promise<boolean> {
+	try {
+		const stdout = await gitSpawn(
+			["show", "--format=", "-U0", hash, "--", filePath],
+			root
+		);
+
+		const hasCodeChange = parseDiffForCode(stdout);
+		return !hasCodeChange;
+	} catch (e) {
+		return false;
+	}
+}
+
+function parseDiffForCode(diffText: string): boolean {
+	const lines = diffText.split("\n");
+
+	for (const line of lines) {
+		if (
+			line.startsWith("---") ||
+			line.startsWith("+++") ||
+			line.startsWith("index") ||
+			line.startsWith("@@")
+		) {
+			continue;
+		}
+
+		if (line.startsWith("+") || line.startsWith("-")) {
+			const content = line.substring(1).trim();
+
+			if (content.length === 0) {
+				continue;
+			}
+
+			if (!content.startsWith("--")) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
