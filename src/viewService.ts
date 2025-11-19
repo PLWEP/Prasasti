@@ -3,7 +3,7 @@ import * as cp from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
-const HEADER_REGEX = /--\s+(\d{6})\s+\w+/;
+const HEADER_REGEX = /--\s+(\d{6})\s+[\w\d]+/;
 
 export enum DocStatus {
 	SUCCESS,
@@ -13,30 +13,27 @@ export enum DocStatus {
 	DIRTY_CODE,
 }
 
-export interface FileResult {
+export interface AuditResult {
 	status: DocStatus;
 	reason: string;
 }
 
 interface FileCache {
 	lastHash: string;
-	result: FileResult;
+	result: AuditResult;
 }
 
 function gitSpawn(args: string[], cwd: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const child = cp.spawn("git", args, { cwd, shell: false });
-
 		let stdout = "";
 		let stderr = "";
-
-		child.stdout.on("data", (data) => {
-			stdout += data.toString();
+		child.stdout.on("data", (d) => {
+			stdout += d.toString();
 		});
-		child.stderr.on("data", (data) => {
-			stderr += data.toString();
+		child.stderr.on("data", (d) => {
+			stderr += d.toString();
 		});
-
 		child.on("close", (code) => {
 			if (code === 0) {
 				resolve(stdout.trim());
@@ -46,10 +43,7 @@ function gitSpawn(args: string[], cwd: string): Promise<string> {
 				reject(err);
 			}
 		});
-
-		child.on("error", (err) => {
-			reject(err);
-		});
+		child.on("error", (err) => reject(err));
 	});
 }
 
@@ -58,8 +52,20 @@ export async function readedFile(
 	workspaceRoot: string,
 	cacheState: vscode.Memento,
 	logger?: vscode.OutputChannel
-): Promise<FileResult> {
+): Promise<AuditResult> {
 	try {
+		let isDirty = false;
+		try {
+			await gitSpawn(
+				["diff", "--quiet", "HEAD", "--", filePath],
+				workspaceRoot
+			);
+		} catch (err: any) {
+			if (err.code === 1) {
+				isDirty = true;
+			}
+		}
+
 		const output = await gitSpawn(
 			[
 				"log",
@@ -73,49 +79,42 @@ export async function readedFile(
 		);
 
 		if (!output) {
-			return {
-				status: DocStatus.UNKNOWN,
-				reason: "No git history found (Untracked?)",
-			};
+			return { status: DocStatus.UNKNOWN, reason: "Untracked file" };
 		}
 
 		const [currentHash, gitDateStr] = output.split("|");
 
-		if (!gitDateStr || gitDateStr.length !== 6) {
-			logger?.appendLine(
-				`[WARN] ${path.basename(
-					filePath
-				)}: Invalid Git Date '${gitDateStr}'`
-			);
-		}
-
 		const cacheKey = `prasasti.cache.${filePath}`;
-		const cachedData = cacheState.get<FileCache>(cacheKey);
 
-		if (cachedData && cachedData.lastHash === currentHash) {
-			return cachedData.result;
+		if (!isDirty) {
+			const cachedData = cacheState.get<FileCache>(cacheKey);
+			if (cachedData && cachedData.lastHash === currentHash) {
+				return cachedData.result;
+			}
 		}
 
-		const buffer = Buffer.alloc(1024);
+		const buffer = Buffer.alloc(8192);
 		const fd = fs.openSync(filePath, "r");
-		fs.readSync(fd, buffer, 0, 1024, 0);
+		const bytesRead = fs.readSync(fd, buffer, 0, 8192, 0);
 		fs.closeSync(fd);
 
-		const contentSnippet = buffer.toString("utf8");
+		const contentSnippet = buffer.slice(0, bytesRead).toString("utf8");
 		const match = contentSnippet.match(HEADER_REGEX);
 
 		const headerDateStr = match ? match[1] : "000000";
-
 		const gitDateInt = parseInt(gitDateStr) || 0;
 		const headerDateInt = parseInt(headerDateStr) || 0;
 
-		let result: FileResult;
+		let result: AuditResult;
 
 		if (headerDateStr === "000000") {
 			result = {
 				status: DocStatus.NO_HEADER,
 				reason: "Header Regex not matched",
 			};
+			logger?.appendLine(
+				`[FAIL] Regex failed for ${path.basename(filePath)}`
+			);
 		} else if (headerDateInt >= gitDateInt) {
 			result = { status: DocStatus.SUCCESS, reason: "Up to date" };
 		} else {
@@ -123,15 +122,16 @@ export async function readedFile(
 				status: DocStatus.OUTDATED,
 				reason: `Header (${headerDateInt}) < Git (${gitDateInt})`,
 			};
-
-			logger?.appendLine(
-				`[OUTDATED] ${path.basename(
-					filePath
-				)}: H=${headerDateInt} vs G=${gitDateInt}`
-			);
+			logger?.appendLine(`[OUTDATED] ${path.basename(filePath)}`);
 		}
 
-		cacheState.update(cacheKey, { lastHash: currentHash, result: result });
+		if (!isDirty) {
+			cacheState.update(cacheKey, {
+				lastHash: currentHash,
+				result: result,
+			});
+		}
+
 		return result;
 	} catch (e: any) {
 		return { status: DocStatus.UNKNOWN, reason: `Exception: ${e.message}` };
