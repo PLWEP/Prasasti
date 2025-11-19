@@ -87,7 +87,7 @@ export async function readedFile(
 			[
 				"log",
 				"-1",
-				"--format=%H|%ad|%s",
+				"--format=%H%%%ad%%%s",
 				"--date=format:%y%m%d",
 				"--",
 				filePath,
@@ -99,7 +99,7 @@ export async function readedFile(
 			return { status: DocStatus.UNKNOWN, reason: "Untracked file" };
 		}
 
-		const [currentHash, gitDateStr, commitSubject] = output.split("|");
+		const [currentHash, gitDateStr, commitSubject] = output.split("%%%");
 
 		const cacheKey = `prasasti.cache.${filePath}`;
 		if (!isDirty) {
