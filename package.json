@@ -1,101 +1,74 @@
 {
 	"name": "prasasti",
 	"displayName": "Prasasti",
-	"description": "Automate source code documentation using AI.",
+	"description": "Automate source code documentation using AI (Gemini).",
 	"version": "1.0.0",
 	"publisher": "PLWEP",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/PLWEP/prasasti"
 	},
+	"keywords": [
+		"documentation",
+		"ai",
+		"gemini",
+		"plsql",
+		"automation"
+	],
 	"engines": {
-		"vscode": "^1.106.0"
+		"vscode": "^1.90.0"
 	},
 	"categories": [
+		"Programming Languages",
+		"Machine Learning",
 		"Other"
 	],
 	"activationEvents": [
-		"onStartupFinished"
+		"onStartupFinished",
+		"onView:prasasti-explorer"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
 		"commands": [
 			{
 				"command": "prasasti.refresh",
-				"title": "Refresh",
+				"title": "Prasasti: Refresh List",
 				"icon": "$(refresh)"
 			},
 			{
-				"command": "prasasti.fixAll",
-				"title": "Generate Documentation for All",
-				"icon": "$(sparkle)"
+				"command": "prasasti.generateAll",
+				"title": "Prasasti: Generate All Docs",
+				"icon": "$(sparkle)",
+				"shortTitle": "Generate All"
 			},
 			{
-				"command": "prasasti.fixSingle",
-				"title": "Regenerate Docs",
-				"icon": "$(sparkle)"
+				"command": "prasasti.generateSingle",
+				"title": "Prasasti: Regenerate Single Doc",
+				"icon": "$(sparkle)",
+				"shortTitle": "Regenerate"
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
-					"command": "prasasti.fixAll",
+					"command": "prasasti.generateAll",
 					"when": "view == prasasti.problems",
-					"group": "navigation"
+					"group": "navigation@1"
 				},
 				{
 					"command": "prasasti.refresh",
 					"when": "view == prasasti.problems",
-					"group": "navigation"
+					"group": "navigation@2"
 				}
 			],
 			"view/item/context": [
 				{
-					"command": "prasasti.fixSingle",
+					"command": "prasasti.generateSingle",
 					"when": "view == prasasti.problems",
 					"group": "inline"
 				}
 			]
-		},
-		"configuration": {
-			"title": "Prasasti Configuration",
-			"properties": {
-				"prasasti.includedFiles": {
-					"type": "string",
-					"default": "**/*.{plsql,plsvc,views}",
-					"description": "Glob pattern untuk file (contoh: **/*.{plsql,svc})"
-				},
-				"prasasti.geminiModel": {
-					"type": "string",
-					"default": "gemini-1.5-flash",
-					"description": "Nama model Gemini yang digunakan untuk generate dokumentasi (misalnya: gemini-1.5-flash atau gemini-2.5-flash)."
-				},
-				"prasasti.apiKey": {
-					"type": "string",
-					"default": "",
-					"description": "Google Gemini API Key untuk auto-documentation."
-				},
-				"prasasti.autoApply": {
-					"type": "boolean",
-					"default": true,
-					"description": "Jika true, AI langsung menimpa file. Jika false, akan membuka tampilan 'Diff View' untuk review."
-				},
-				"prasasti.maxRetries": {
-					"type": "number",
-					"default": 3,
-					"description": "Jumlah percobaan ulang jika Gemini API terkena Rate Limit (429)."
-				},
-				"prasasti.skipDocKeywords": {
-					"type": "array",
-					"default": [
-						"Documented",
-						"Documentation",
-						"DOCS",
-						"Docs Only"
-					],
-					"description": "List of keywords in the last commit message to treat as 'Documentation Update Only', bypassing the outdated check."
-				}
-			}
 		},
 		"viewsContainers": {
 			"activitybar": [
@@ -114,6 +87,52 @@
 					"icon": "$(warning)"
 				}
 			]
+		},
+		"configuration": {
+			"title": "Prasasti",
+			"properties": {
+				"prasasti.files.include": {
+					"type": "string",
+					"default": "**/*.{plsql,plsvc,views}",
+					"description": "Glob pattern untuk file yang akan dipindai.",
+					"order": 1
+				},
+				"prasasti.files.gitSkipKeywords": {
+					"type": "array",
+					"default": [
+						"Documented",
+						"Documentation",
+						"DOCS",
+						"Docs Only"
+					],
+					"description": "Keyword commit message yang dianggap 'Hanya Update Dokumen' (bypass outdated check).",
+					"order": 2
+				},
+				"prasasti.ai.model": {
+					"type": "string",
+					"default": "gemini-2.5-flash",
+					"description": "Model Gemini yang digunakan.",
+					"order": 10
+				},
+				"prasasti.ai.apiKey": {
+					"type": "string",
+					"default": "",
+					"description": "Google Gemini API Key.",
+					"order": 11
+				},
+				"prasasti.behavior.autoApply": {
+					"type": "boolean",
+					"default": true,
+					"description": "Jika true, langsung menimpa file. Jika false, buka 'Diff View'.",
+					"order": 20
+				},
+				"prasasti.network.maxRetries": {
+					"type": "number",
+					"default": 3,
+					"description": "Jumlah retry jika terkena Rate Limit (429).",
+					"order": 30
+				}
+			}
 		}
 	},
 	"scripts": {
@@ -123,22 +142,17 @@
 		"watch:esbuild": "node esbuild.js --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
 		"package": "npm run check-types && npm run lint && node esbuild.js --production",
-		"compile-tests": "tsc -p . --outDir out",
-		"watch-tests": "tsc -p . -w --outDir out",
-		"pretest": "npm run compile-tests && npm run compile && npm run lint",
-		"check-types": "tsc --noEmit",
-		"lint": "eslint src",
-		"test": "vscode-test"
+		"test": "npm run compile && vscode-test"
 	},
 	"devDependencies": {
-		"@types/vscode": "^1.106.1",
+		"@types/vscode": "^1.90.0",
 		"@types/mocha": "^10.0.10",
-		"@types/node": "22.x",
+		"@types/node": "20.x",
 		"typescript-eslint": "^8.46.3",
 		"eslint": "^9.39.1",
-		"esbuild": "^0.27.0",
+		"esbuild": "^0.24.0",
 		"npm-run-all": "^4.1.5",
-		"typescript": "^5.9.3",
+		"typescript": "^5.3.3",
 		"@vscode/test-cli": "^0.0.12",
 		"@vscode/test-electron": "^2.5.2"
 	}

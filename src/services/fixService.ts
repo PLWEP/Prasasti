@@ -4,6 +4,8 @@ import * as cp from "child_process";
 import * as util from "util";
 import * as path from "path";
 import * as os from "os";
+import { Logger } from "../utils/logger";
+import { CONFIG_SECTION } from "../constants";
 
 const execAsync = util.promisify(cp.exec);
 
@@ -12,162 +14,185 @@ export async function runAiScriptForFile(
 	workspaceRoot: string,
 	apiKey: string
 ): Promise<void> {
-	const config = vscode.workspace.getConfiguration("prasasti");
-	const model = config.get<string>("geminiModel") || "gemini-2.5-flash";
-	const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-	const headers = {
-		"x-goog-api-key": apiKey,
-		"Content-Type": "application/json",
-	};
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+	const model = config.get<string>("ai.model") || "gemini-1.5-flash";
+	const autoApply = config.get<boolean>("behavior.autoApply") ?? true;
 
 	let originalContent = "";
 	try {
 		originalContent = await fs.readFile(filePath, "utf8");
 	} catch (e) {
-		throw new Error("Could not read file content.");
+		throw new Error(`Could not read file: ${filePath}`);
 	}
 
-	const headerMatch = originalContent.match(/--\s+(\d{6})\s+\w+/);
+	const forensicData = await analyzeGitHistory(
+		filePath,
+		workspaceRoot,
+		originalContent
+	);
 
-	let gitCommand = `git log -n 20 --date=format:'%y%m%d' --pretty=format:"%H|%ad|%an" -- "${filePath}"`;
-
-	if (headerMatch) {
-		const lastDocDate = headerMatch[1];
-
-		const isoDate = `20${lastDocDate.substring(
-			0,
-			2
-		)}-${lastDocDate.substring(2, 4)}-${lastDocDate.substring(4, 6)}`;
-
-		console.log(
-			`[Prasasti] Found last doc date: ${isoDate}. Fetching incremental updates...`
-		);
-		gitCommand = `git log --since="${isoDate} 00:00:00" --date=format:'%y%m%d' --pretty=format:"%H|%ad|%an" -- "${filePath}"`;
-	}
-
-	let commitsRaw: string;
-	try {
-		const { stdout } = await execAsync(gitCommand, { cwd: workspaceRoot });
-		commitsRaw = stdout.trim();
-	} catch (e) {
-		return;
-	}
-
-	if (!commitsRaw) {
+	if (!forensicData) {
 		vscode.window.showInformationMessage(
-			"No new commits found since the last documentation date."
+			"No new commits found since the last documentation."
 		);
 		return;
-	}
-
-	const commits = commitsRaw.split("\n");
-	let forensicData = "";
-
-	const commitsToProcess = commits.slice(0, 10);
-
-	for (const commitLine of commitsToProcess) {
-		const parts = commitLine.split("|");
-		if (parts.length < 3) {
-			continue;
-		}
-
-		const hash = parts[0];
-		const date = parts[1];
-		const author = parts[2];
-
-		try {
-			const { stdout } = await execAsync(
-				`git show --no-color --oneline ${hash} -- "${filePath}"`,
-				{ cwd: workspaceRoot, maxBuffer: 1024 * 1024 * 5 }
-			);
-			const cleanDiff = stdout
-				.split("\n")
-				.filter((l) => l.match(/^(\+|-)|^\s+@@/))
-				.join("\n");
-			forensicData += `=== COMMIT: ${date} by ${author} ===\n${cleanDiff}\n================================\n`;
-		} catch (e) {
-			continue;
-		}
 	}
 
 	const fileName = path.basename(filePath);
-
 	const promptText = getPrompt(fileName, forensicData, originalContent);
 
+	Logger.info(`[AI] Requesting update for ${fileName} using ${model}...`);
 	const newContent = await callGeminiWithRetry(
-		apiUrl,
-		headers,
+		model,
+		apiKey,
 		promptText,
 		fileName
 	);
 
 	if (newContent) {
 		const cleanContent = newContent
-			.replace(/^```sql\s*/, "")
+			.replace(/^```sql\s*/i, "")
+			.replace(/^```plsql\s*/i, "")
 			.replace(/```$/, "");
 
-		const autoApply = config.get<boolean>("autoApply");
 		if (autoApply) {
 			await fs.writeFile(filePath, cleanContent, "utf8");
+			Logger.info(`[SUCCESS] Applied changes to ${fileName}`);
 		} else {
 			await showDiffPreview(filePath, cleanContent);
+			Logger.info(`[SUCCESS] Opened Diff View for ${fileName}`);
 		}
 	} else {
-		throw new Error(`Gemini API failed for ${fileName}`);
+		throw new Error(`Gemini API returned empty response for ${fileName}`);
 	}
 }
 
-async function showDiffPreview(originalPath: string, newContent: string) {
-	const fileName = path.basename(originalPath);
-	const tempPath = path.join(os.tmpdir(), `prasasti_new_${fileName}`);
-	await fs.writeFile(tempPath, newContent, "utf8");
-	const leftUri = vscode.Uri.file(originalPath);
-	const rightUri = vscode.Uri.file(tempPath);
-	await vscode.commands.executeCommand(
-		"vscode.diff",
-		leftUri,
-		rightUri,
-		`Review AI: ${fileName}`
-	);
+async function analyzeGitHistory(
+	filePath: string,
+	cwd: string,
+	content: string
+): Promise<string | null> {
+	const headerMatch = content.match(/--\s+(\d{6})\s+\w+/);
+	let gitCommand = `git log -n 20 --date=format:'%y%m%d' --pretty=format:"%H|%ad|%an" -- "${filePath}"`;
+
+	if (headerMatch) {
+		const lastDocDate = headerMatch[1];
+		const isoDate = `20${lastDocDate.substring(
+			0,
+			2
+		)}-${lastDocDate.substring(2, 4)}-${lastDocDate.substring(4, 6)}`;
+
+		Logger.info(
+			`[GIT] Last doc date found: ${isoDate}. Fetching incremental updates...`
+		);
+		gitCommand = `git log --since="${isoDate} 00:00:00" --date=format:'%y%m%d' --pretty=format:"%H|%ad|%an" -- "${filePath}"`;
+	}
+
+	let commitsRaw: string;
+	try {
+		const { stdout } = await execAsync(gitCommand, { cwd });
+		commitsRaw = stdout.trim();
+	} catch (e: any) {
+		Logger.error(`[GIT ERROR] Failed to read logs: ${e.message}`);
+		return null;
+	}
+
+	if (!commitsRaw) {
+		return null;
+	}
+
+	const commits = commitsRaw.split("\n").slice(0, 10);
+	let forensicData = "";
+
+	for (const commitLine of commits) {
+		const parts = commitLine.split("|");
+		if (parts.length < 3) {
+			continue;
+		}
+
+		const [hash, date, author] = parts;
+
+		try {
+			const { stdout } = await execAsync(
+				`git show --no-color --oneline ${hash} -- "${filePath}"`,
+				{ cwd, maxBuffer: 1024 * 1024 * 5 }
+			);
+
+			const cleanDiff = stdout
+				.split("\n")
+				.filter((l) => l.match(/^(\+|-)|^\s+@@/))
+				.join("\n");
+
+			forensicData += `=== COMMIT: ${date} by ${author} ===\n${cleanDiff}\n================================\n`;
+		} catch (e) {
+			continue;
+		}
+	}
+
+	return forensicData || null;
 }
 
 async function callGeminiWithRetry(
-	url: string,
-	headers: any,
+	modelName: string,
+	apiKey: string,
 	prompt: string,
 	fileName: string
 ): Promise<string | null> {
-	const config = vscode.workspace.getConfiguration("prasasti");
-	const maxRetries = config.get<number>("maxRetries") || 3;
+	const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+	const headers = {
+		"x-goog-api-key": apiKey,
+		"Content-Type": "application/json",
+	};
+
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+	const maxRetries = config.get<number>("network.maxRetries") || 3;
+
 	let attempt = 0;
 
 	while (attempt < maxRetries) {
 		try {
-			const response = await fetch(url, {
+			const response = await fetch(apiUrl, {
 				method: "POST",
 				headers: headers,
 				body: JSON.stringify({
 					contents: [{ parts: [{ text: prompt }] }],
-					generationConfig: { temperature: 0.2 },
+					generationConfig: {
+						temperature: 0.2,
+						maxOutputTokens: 8192,
+					},
 				}),
 			});
 
 			if (response.status === 429) {
 				attempt++;
 				const delay = Math.pow(2, attempt) * 1000;
-				console.warn(
-					`Rate limit hit for ${fileName}. Retrying in ${delay}ms...`
+				Logger.warn(
+					`[RATE LIMIT] ${fileName} (Attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`
 				);
 				await new Promise((r) => setTimeout(r, delay));
 				continue;
 			}
+
 			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}`);
+				throw new Error(
+					`HTTP ${response.status} - ${response.statusText}`
+				);
 			}
+
 			const result: any = await response.json();
-			return result.candidates[0].content.parts[0].text;
-		} catch (e) {
+
+			if (
+				result.candidates &&
+				result.candidates[0] &&
+				result.candidates[0].content
+			) {
+				return result.candidates[0].content.parts[0].text;
+			} else {
+				return null;
+			}
+		} catch (e: any) {
 			attempt++;
+			Logger.error(`[API ERROR] ${e.message}`);
 			if (attempt >= maxRetries) {
 				return null;
 			}
@@ -176,8 +201,25 @@ async function callGeminiWithRetry(
 	return null;
 }
 
+async function showDiffPreview(originalPath: string, newContent: string) {
+	const fileName = path.basename(originalPath);
+	const tempPath = path.join(os.tmpdir(), `prasasti_ai_${fileName}`);
+
+	await fs.writeFile(tempPath, newContent, "utf8");
+
+	const leftUri = vscode.Uri.file(originalPath);
+	const rightUri = vscode.Uri.file(tempPath);
+
+	await vscode.commands.executeCommand(
+		"vscode.diff",
+		leftUri,
+		rightUri,
+		`Review AI: ${fileName}`
+	);
+}
+
 function getPrompt(fileName: string, forensic: string, code: string): string {
-	const template = `
+	return `
 You are a Senior IFS ERP Technical Consultant. Your task is to UPDATE documentation based on NEW GIT CHANGES.
 
 INPUTS:
@@ -217,15 +259,10 @@ RULES:
 8. CRITICAL: The string '$SEARCH' and any text after that must remain intact.
 9. IMPORTANT: Do not delete any system-level logging calls, including any function starting with 'Log_Sys.' or 'Dbms_Output'. These are required system functions.
 
-FORENSIC GIT HISTORY for '{{FILENAME}}':
-{{FORENSIC_DATA}}
+FORENSIC GIT HISTORY for '${fileName}':
+${forensic}
 
-SOURCE CODE for '{{FILENAME}}':
-{{SOURCE_CODE}}
+SOURCE CODE for '${fileName}':
+${code}
 `;
-
-	return template
-		.replace("{{FILENAME}}", fileName)
-		.replace("{{FORENSIC_DATA}}", forensic)
-		.replace("{{SOURCE_CODE}}", code);
 }

@@ -1,228 +1,175 @@
 import * as vscode from "vscode";
+import {
+	PrasastiDataManager,
+	PrasastiProvider,
+} from "./providers/issueProvider";
+import { generateDocsForFile } from "./commands/generateDocs";
+import { COMMANDS, CONFIG, VIEWS } from "./constants";
+import { Logger } from "./utils/logger";
 import * as path from "path";
-import { PrasastiProvider, PrasastiDataManager } from "./issueProvider";
-import { runAiScriptForFile } from "./fixService";
-
-const logger = vscode.window.createOutputChannel("Prasasti Debug");
 
 export function activate(context: vscode.ExtensionContext) {
-	logger.appendLine(
-		`[${new Date().toLocaleTimeString()}] Extension Activated.`
-	);
+	Logger.info("Prasasti Extension Activated.");
 
 	const dataManager = PrasastiDataManager.getInstance();
 	dataManager.setContext(context.workspaceState);
 
-	dataManager.setLogger(logger);
-
-	const problemProvider = new PrasastiProvider();
-
-	const problemTreeView = vscode.window.createTreeView("prasasti.problems", {
-		treeDataProvider: problemProvider,
-		showCollapseAll: true,
+	const provider = new PrasastiProvider();
+	const treeView = vscode.window.createTreeView(VIEWS.PROBLEMS, {
+		treeDataProvider: provider,
 	});
 
-	context.subscriptions.push(problemTreeView);
-
-	dataManager.onDidChangeData.event(() => {
-		const count = dataManager.getProblemFiles().length;
+	provider.onDidChangeTreeData(() => {
+		const count = provider.getItems().length;
 		if (count > 0) {
-			problemTreeView.badge = {
+			treeView.badge = {
 				value: count,
-				tooltip: `${count} files need documentation attention`,
+				tooltip: `${count} files need documentation updates`,
 			};
 		} else {
-			problemTreeView.badge = undefined;
+			treeView.badge = undefined;
 		}
 	});
 
-	const refreshCmd = vscode.commands.registerCommand(
-		"prasasti.refresh",
-		() => {
-			problemProvider.refresh();
-			vscode.window.showInformationMessage("Refreshed");
-		}
-	);
+	context.subscriptions.push(
+		vscode.commands.registerCommand(COMMANDS.REFRESH, () => {
+			provider.refresh();
+		}),
 
-	const fixAllCmd = vscode.commands.registerCommand(
-		"prasasti.fixAll",
-		async () => {
-			const config = vscode.workspace.getConfiguration("prasasti");
-			const apiKey = config.get<string>("apiKey");
-
-			if (!apiKey) {
-				promptToOpenSettings(
-					"Gemini API Key is missing. Please configure it to use AI features."
-				);
-				return;
-			}
-
-			const filesToFix = dataManager.getProblemFiles();
-			if (filesToFix.length === 0) {
-				vscode.window.showInformationMessage("No files need updates!");
-				return;
-			}
-
-			const confirm = await vscode.window.showWarningMessage(
-				`Regenerate documentation for ${filesToFix.length} files?`,
-				"Yes",
-				"Cancel"
-			);
-			if (confirm !== "Yes") {
-				return;
-			}
-
-			vscode.window.withProgress(
-				{
-					location: vscode.ProgressLocation.Notification,
-					title: "Generating Documentation (AI)...",
-					cancellable: true,
-				},
-				async (progress, token) => {
-					let processed = 0;
-					for (const item of filesToFix) {
-						if (token.isCancellationRequested) {
-							break;
-						}
-
-						const wsFolder = vscode.workspace.getWorkspaceFolder(
-							item.resourceUri
-						);
-						if (wsFolder) {
-							progress.report({
-								message: `Processing ${item.label}...`,
-								increment: (1 / filesToFix.length) * 100,
-							});
-							try {
-								await runAiScriptForFile(
-									item.resourceUri.fsPath,
-									wsFolder.uri.fsPath,
-									apiKey
-								);
-								logger.appendLine(
-									`[SUCCESS] Generated: ${item.label}`
-								);
-							} catch (e: any) {
-								logger.appendLine(
-									`[ERROR] FixAll: ${e.message}`
-								);
-								vscode.window.showErrorMessage(
-									`Failed ${item.label}: ${e.message}`
-								);
-							}
-						}
-						processed++;
-					}
-					problemProvider.refresh();
-					vscode.window.showInformationMessage(
-						`Completed! Processed ${processed} files.`
-					);
+		vscode.commands.registerCommand(
+			COMMANDS.GENERATE_SINGLE,
+			async (item) => {
+				const apiKey = getApiKey();
+				if (!apiKey) {
+					return;
 				}
-			);
-		}
-	);
 
-	const fixSingleCmd = vscode.commands.registerCommand(
-		"prasasti.fixSingle",
-		async (item: any) => {
-			if (!item || !item.resourceUri) {
-				return;
-			}
-			const config = vscode.workspace.getConfiguration("prasasti");
-			const apiKey = config.get<string>("apiKey");
-
-			if (!apiKey) {
-				promptToOpenSettings("Gemini API Key is missing.");
-				return;
-			}
-
-			const fileName = path.basename(item.resourceUri.fsPath);
-			vscode.window.withProgress(
-				{
-					location: vscode.ProgressLocation.Notification,
-					title: `Updating ${fileName}...`,
-				},
-				async () => {
-					const wsFolder = vscode.workspace.getWorkspaceFolder(
-						item.resourceUri
-					);
-					if (wsFolder) {
+				await vscode.window.withProgress(
+					{
+						location: vscode.ProgressLocation.Notification,
+						title: `Generating docs for ${path.basename(
+							item.resourceUri.fsPath
+						)}...`,
+						cancellable: false,
+					},
+					async () => {
 						try {
-							await runAiScriptForFile(
-								item.resourceUri.fsPath,
-								wsFolder.uri.fsPath,
-								apiKey
-							);
-							problemProvider.refresh();
+							await generateDocsForFile(item.resourceUri, apiKey);
 							vscode.window.showInformationMessage(
-								`Updated ${fileName}`
+								"Docs updated!"
 							);
+							provider.refresh();
 						} catch (e: any) {
 							vscode.window.showErrorMessage(
 								`Error: ${e.message}`
 							);
+							Logger.error(
+								"Generate Single Failed",
+								"Extension",
+								e
+							);
 						}
+					}
+				);
+			}
+		),
+
+		vscode.commands.registerCommand(COMMANDS.GENERATE_ALL, async () => {
+			const apiKey = getApiKey();
+			if (!apiKey) {
+				return;
+			}
+
+			const items = provider.getItems();
+			if (items.length === 0) {
+				return vscode.window.showInformationMessage(
+					"No files to update."
+				);
+			}
+
+			const confirm = await vscode.window.showWarningMessage(
+				`Are you sure you want to generate docs for ${items.length} files?`,
+				"Yes, Generate All",
+				"Cancel"
+			);
+
+			if (confirm !== "Yes, Generate All") {
+				return;
+			}
+
+			await vscode.window.withProgress(
+				{
+					location: vscode.ProgressLocation.Notification,
+					title: "Prasasti Batch Update",
+					cancellable: true,
+				},
+				async (progress, token) => {
+					let successCount = 0;
+					let failCount = 0;
+					const total = items.length;
+
+					for (let i = 0; i < total; i++) {
+						if (token.isCancellationRequested) {
+							Logger.warn(
+								"Batch process cancelled by user.",
+								"Extension"
+							);
+							break;
+						}
+
+						const item = items[i];
+						const fileName = path.basename(item.resourceUri.fsPath);
+
+						progress.report({
+							message: `Processing (${
+								i + 1
+							}/${total}): ${fileName}...`,
+							increment: (1 / total) * 100,
+						});
+
+						try {
+							await generateDocsForFile(item.resourceUri, apiKey);
+							successCount++;
+						} catch (e: any) {
+							failCount++;
+							Logger.error(
+								`Failed to process ${fileName}`,
+								"Batch",
+								e
+							);
+						}
+					}
+
+					provider.refresh();
+
+					if (failCount > 0) {
+						vscode.window.showWarningMessage(
+							`Batch complete. Success: ${successCount}, Failed: ${failCount}. Check logs for details.`
+						);
+					} else {
+						vscode.window.showInformationMessage(
+							`Batch complete! Successfully updated ${successCount} files.`
+						);
 					}
 				}
 			);
-		}
-	);
-
-	let debounceTimer: NodeJS.Timeout | undefined;
-	const triggerRefresh = () => {
-		if (debounceTimer) {
-			clearTimeout(debounceTimer);
-		}
-		debounceTimer = setTimeout(() => problemProvider.refresh(), 2000);
-	};
-
-	const fileWatcher = vscode.workspace.createFileSystemWatcher("**/*");
-	fileWatcher.onDidChange(triggerRefresh);
-	fileWatcher.onDidCreate(triggerRefresh);
-	fileWatcher.onDidDelete(triggerRefresh);
-
-	context.subscriptions.push(
-		fileWatcher,
-		refreshCmd,
-		fixAllCmd,
-		fixSingleCmd
-	);
-
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration("prasasti")) {
-				triggerRefresh();
-			}
 		})
 	);
 
-	checkSettingsOnStartup();
-
-	problemProvider.refresh();
+	setTimeout(() => {
+		Logger.info("Triggering initial scan...", "Extension");
+		provider.refresh();
+	}, 1000);
 }
 
-async function checkSettingsOnStartup() {
-	const config = vscode.workspace.getConfiguration("prasasti");
-	const apiKey = config.get<string>("apiKey");
-
-	if (!apiKey || apiKey.trim() === "") {
-		promptToOpenSettings(
-			"Prasasti: Please set your Google Gemini API Key to enable AI documentation."
-		);
+function getApiKey(): string | undefined {
+	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
+	const key = config.get<string>(CONFIG.KEYS.API_KEY);
+	if (!key) {
+		vscode.window.showErrorMessage("API Key missing. Check Settings.");
+		return undefined;
 	}
-}
-
-async function promptToOpenSettings(message: string) {
-	const selection = await vscode.window.showWarningMessage(
-		message,
-		"Open Settings"
-	);
-	if (selection === "Open Settings") {
-		vscode.commands.executeCommand(
-			"workbench.action.openSettings",
-			"prasasti"
-		);
-	}
+	return key;
 }
 
 export function deactivate() {}
