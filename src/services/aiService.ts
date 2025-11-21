@@ -5,11 +5,12 @@ import { Logger } from "../utils/logger";
 export class AiService {
 	static async generateDocs(
 		prompt: string,
-		apiKey: string
+		apiKey: string,
+		isJsonMode: boolean = false
 	): Promise<string | null> {
 		const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
 		const model =
-			config.get<string>(CONFIG.KEYS.MODEL) || "gemini-2.5-flash";
+			config.get<string>(CONFIG.KEYS.MODEL) || "gemini-1.5-flash";
 		const retries = config.get<number>(CONFIG.KEYS.RETRIES) || 3;
 
 		const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -20,7 +21,9 @@ export class AiService {
 				Logger.info(
 					`[AI] Sending ${
 						prompt.length
-					} chars to (${model}). Attempt ${attempt + 1}`,
+					} chars to (${model}). JsonMode: ${isJsonMode}. Attempt ${
+						attempt + 1
+					}`,
 					"AI"
 				);
 
@@ -53,6 +56,9 @@ export class AiService {
 						generationConfig: {
 							temperature: 0.2,
 							maxOutputTokens: 8192,
+							responseMimeType: isJsonMode
+								? "application/json"
+								: "text/plain",
 						},
 					}),
 				});
@@ -66,88 +72,42 @@ export class AiService {
 				}
 
 				if (!response.ok) {
-					const errorText = await response.text();
-					Logger.error(
-						`HTTP Error ${response.status}`,
-						"AI",
-						errorText
-					);
-					throw new Error(`HTTP ${response.status}: ${errorText}`);
+					const errText = await response.text();
+					throw new Error(`HTTP ${response.status}: ${errText}`);
 				}
 
 				const json: any = await response.json();
 
-				if (json.promptFeedback && json.promptFeedback.blockReason) {
+				if (json.promptFeedback?.blockReason) {
 					Logger.error(
-						`BLOCKED BY FILTER: ${json.promptFeedback.blockReason}`,
+						`BLOCKED: ${json.promptFeedback.blockReason}`,
 						"AI"
 					);
 					return null;
 				}
 
 				if (!json.candidates || json.candidates.length === 0) {
-					Logger.error(
-						"AI Response OK but Candidates Empty. (Possible content filter)",
-						"AI"
-					);
-					Logger.warn(
-						JSON.stringify(json).substring(0, 500),
-						"AI-Debug"
-					);
+					Logger.error("Empty candidates.", "AI");
 					return null;
 				}
 
 				const candidate = json.candidates[0];
 
-				if (
-					candidate.finishReason &&
-					candidate.finishReason !== "STOP"
-				) {
-					Logger.warn(
-						`AI stopped abnormally. Reason: ${candidate.finishReason}`,
-						"AI"
-					);
-
-					if (candidate.finishReason === "SAFETY") {
-						Logger.error(
-							"SAFETY TRIGGERED: Code contains SQL commands considered malicious.",
-							"AI"
-						);
-						return null; // Batal
-					}
-
-					if (candidate.finishReason === "MAX_TOKENS") {
-						Logger.error(
-							"FILE TOO LARGE: The file exceeds the AI's output limit (approx 8000 tokens).",
-							"AI"
-						);
-						// PENTING: Return NULL agar file asli tidak ditimpa dengan kode setengah jadi!
-						return null;
-					}
-				}
-
-				if (
-					!candidate.content ||
-					!candidate.content.parts ||
-					candidate.content.parts.length === 0
-				) {
-					Logger.error(
-						"Candidate exists but content text is empty.",
-						"AI"
-					);
+				// MAX_TOKENS handler
+				if (candidate.finishReason === "MAX_TOKENS") {
+					Logger.error("FILE TOO LARGE (MAX_TOKENS).", "AI");
 					return null;
 				}
 
-				const resultText = candidate.content.parts[0].text;
-				Logger.info(
-					`[AI] Success! Received ${resultText.length} chars.`,
-					"AI"
-				);
+				// Pastikan konten ada
+				if (!candidate.content?.parts?.[0]?.text) {
+					return null;
+				}
 
-				return resultText;
-			} catch (e) {
+				return candidate.content.parts[0].text;
+			} catch (e: any) {
 				attempt++;
-				Logger.error("API Call Exception", "AI", e);
+				Logger.error("API Call Error", "AI", e.message);
 				if (attempt >= retries) {
 					return null;
 				}
