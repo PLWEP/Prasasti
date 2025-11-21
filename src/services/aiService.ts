@@ -12,18 +12,15 @@ export class AiService {
 		const model =
 			config.get<string>(CONFIG.KEYS.MODEL) || "gemini-1.5-flash";
 		const retries = config.get<number>(CONFIG.KEYS.RETRIES) || 3;
-
 		const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 		let attempt = 0;
 		while (attempt < retries) {
 			try {
 				Logger.info(
-					`[AI] Sending ${
-						prompt.length
-					} chars to (${model}). JsonMode: ${isJsonMode}. Attempt ${
-						attempt + 1
-					}`,
+					`[AI] Sending Request (Mode: ${
+						isJsonMode ? "JSON" : "Text"
+					}). Attempt ${attempt + 1}`,
 					"AI"
 				);
 
@@ -65,47 +62,42 @@ export class AiService {
 
 				if (response.status === 429) {
 					const delay = Math.pow(2, attempt) * 2000;
-					Logger.warn(`Rate limit hit. Retrying in ${delay}ms`, "AI");
+					Logger.warn(`Rate limit. Retry in ${delay}ms`, "AI");
 					await new Promise((r) => setTimeout(r, delay));
 					attempt++;
 					continue;
 				}
 
 				if (!response.ok) {
-					const errText = await response.text();
-					throw new Error(`HTTP ${response.status}: ${errText}`);
+					throw new Error(`HTTP ${response.status}`);
 				}
 
 				const json: any = await response.json();
 
 				if (json.promptFeedback?.blockReason) {
-					Logger.error(
-						`BLOCKED: ${json.promptFeedback.blockReason}`,
-						"AI"
-					);
 					return null;
 				}
-
 				if (!json.candidates || json.candidates.length === 0) {
-					Logger.error("Empty candidates.", "AI");
 					return null;
 				}
 
 				const candidate = json.candidates[0];
 
-				// MAX_TOKENS handler
 				if (candidate.finishReason === "MAX_TOKENS") {
-					Logger.error("FILE TOO LARGE (MAX_TOKENS).", "AI");
-					return null;
+					Logger.warn("AI Response Truncated (MAX_TOKENS).", "AI");
+					throw new Error("MAX_TOKENS_LIMIT");
 				}
 
-				// Pastikan konten ada
 				if (!candidate.content?.parts?.[0]?.text) {
 					return null;
 				}
 
 				return candidate.content.parts[0].text;
 			} catch (e: any) {
+				if (e.message === "MAX_TOKENS_LIMIT") {
+					throw e;
+				}
+
 				attempt++;
 				Logger.error("API Call Error", "AI", e.message);
 				if (attempt >= retries) {
