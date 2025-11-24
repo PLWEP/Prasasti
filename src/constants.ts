@@ -1,7 +1,9 @@
 export const COMMANDS = {
 	REFRESH: "prasasti.refresh",
-	GENERATE_ALL: "prasasti.generateAll",
-	GENERATE_SINGLE: "prasasti.generateSingle",
+	GENERATE_ALL_DOCS: "prasasti.generateAll",
+	GENERATE_SINGLE_DOC: "prasasti.generateSingle",
+	FIX_ALL_MARKERS: "prasasti.fixAllMarkers",
+	FIX_SINGLE_MARKER: "prasasti.fixMarker",
 };
 
 export const VIEWS = {
@@ -21,5 +23,4 @@ export const CONFIG = {
 };
 
 export const HEADER_REGEX = /--\s+(\d{6})\s+[\w\d]+/;
-
 export const LINE_LIMIT_THRESHOLD = 600;

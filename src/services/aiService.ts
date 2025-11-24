@@ -18,7 +18,7 @@ export class AiService {
 		while (attempt < retries) {
 			try {
 				Logger.info(
-					`[AI] Sending Request (${model}). Mode: ${
+					`[AI] Request (${model}). Mode: ${
 						isJsonMode ? "JSON" : "Text"
 					}. Attempt ${attempt + 1}`,
 					"AI"
@@ -62,7 +62,7 @@ export class AiService {
 
 				if (response.status === 429) {
 					const delay = Math.pow(2, attempt) * 2000;
-					Logger.warn(`Rate limit hit. Sleeping ${delay}ms`, "AI");
+					Logger.warn(`Rate limit. Retry in ${delay}ms`, "AI");
 					await new Promise((r) => setTimeout(r, delay));
 					attempt++;
 					continue;
@@ -71,7 +71,6 @@ export class AiService {
 				if (!response.ok) {
 					throw new Error(`HTTP ${response.status}`);
 				}
-
 				const json: any = await response.json();
 
 				if (json.promptFeedback?.blockReason) {
@@ -97,9 +96,8 @@ export class AiService {
 				if (e.message === "MAX_TOKENS_LIMIT") {
 					throw e;
 				}
-
 				attempt++;
-				Logger.error("API Call Error", "AI", e.message);
+				Logger.error("API Error", "AI", e.message);
 				if (attempt >= retries) {
 					return null;
 				}

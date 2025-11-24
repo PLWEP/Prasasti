@@ -70,21 +70,32 @@ export class GitService {
 			: ["diff", "-U0", "HEAD", "--", filePath];
 		try {
 			return await this.spawnAsync(args, root);
-		} catch (e: any) {
-			Logger.warn(`Git diff failed: ${e.message}`, "GitService");
+		} catch {
 			return "";
 		}
 	}
 
-	static async isDirty(filePath: string, root: string): Promise<boolean> {
+	static async getWorkingDiff(
+		filePath: string,
+		root: string
+	): Promise<string> {
+		const args = ["diff", "-U0", "HEAD", "--", filePath];
 		try {
-			await this.spawnAsync(
-				["diff", "--quiet", "HEAD", "--", filePath],
-				root
-			);
-			return false;
+			return await this.spawnAsync(args, root);
 		} catch {
-			return true;
+			return "";
+		}
+	}
+
+	static async getLastCommitDiff(
+		filePath: string,
+		root: string
+	): Promise<string> {
+		const args = ["show", "--format=", "-U0", "HEAD", "--", filePath];
+		try {
+			return await this.spawnAsync(args, root);
+		} catch {
+			return "";
 		}
 	}
 
@@ -94,7 +105,6 @@ export class GitService {
 			`^\\s*(${STRUCTURAL_KEYWORDS.join("|")})(\\s|;|$|\\()`,
 			"i"
 		);
-
 		for (const line of lines) {
 			if (line.match(/^(---|(\+\+\+)|index|@@)/)) {
 				continue;
@@ -102,7 +112,6 @@ export class GitService {
 			if (!line.startsWith("+") && !line.startsWith("-")) {
 				continue;
 			}
-
 			const content = line.substring(1).trim();
 			if (!content || content.startsWith("--")) {
 				continue;
@@ -110,7 +119,6 @@ export class GitService {
 			if (content.match(structRegex)) {
 				continue;
 			}
-
 			return true;
 		}
 		return false;

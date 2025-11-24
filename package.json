@@ -47,25 +47,45 @@
 				"title": "Prasasti: Regenerate Single Doc",
 				"icon": "$(sparkle)",
 				"shortTitle": "Regenerate"
+			},
+			{
+				"command": "prasasti.fixAllMarkers",
+				"title": "Fix All Markers",
+				"icon": "$(tag-add)"
+			},
+			{
+				"command": "prasasti.fixMarker",
+				"title": "Add Markers",
+				"icon": "$(tag-add)"
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
-					"command": "prasasti.generateAll",
+					"command": "prasasti.fixAllMarkers",
 					"when": "view == prasasti.problems",
 					"group": "navigation@1"
 				},
 				{
-					"command": "prasasti.refresh",
+					"command": "prasasti.generateAll",
 					"when": "view == prasasti.problems",
 					"group": "navigation@2"
+				},
+				{
+					"command": "prasasti.refresh",
+					"when": "view == prasasti.problems",
+					"group": "navigation@3"
 				}
 			],
 			"view/item/context": [
 				{
+					"command": "prasasti.fixMarker",
+					"when": "view == prasasti.problems && viewItem == marker",
+					"group": "inline"
+				},
+				{
 					"command": "prasasti.generateSingle",
-					"when": "view == prasasti.problems",
+					"when": "view == prasasti.problems && viewItem == docs",
 					"group": "inline"
 				}
 			]

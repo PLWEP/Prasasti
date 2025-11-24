@@ -1,12 +1,16 @@
 import * as vscode from "vscode";
+import * as fs from "fs/promises";
+import * as path from "path";
 import {
 	PrasastiDataManager,
 	PrasastiProvider,
+	IssueItem,
 } from "./providers/issueProvider";
 import { generateDocsForFile } from "./commands/generateDocs";
+import { MarkerService } from "./services/markerService";
+import { GitService } from "./services/gitService";
 import { COMMANDS, CONFIG, VIEWS } from "./constants";
 import { Logger } from "./utils/logger";
-import * as path from "path";
 
 export function activate(context: vscode.ExtensionContext) {
 	Logger.info("Prasasti Extension Activated.");
@@ -20,11 +24,10 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	provider.onDidChangeTreeData(() => {
-		const count = provider.getItems().length;
+		const total =
+			provider.getMarkerFiles().length + provider.getDocFiles().length;
 		treeView.badge =
-			count > 0
-				? { value: count, tooltip: `${count} outdated files` }
-				: undefined;
+			total > 0 ? { value: total, tooltip: "Issues found" } : undefined;
 	});
 
 	context.subscriptions.push(
@@ -33,104 +36,112 @@ export function activate(context: vscode.ExtensionContext) {
 		),
 
 		vscode.commands.registerCommand(
-			COMMANDS.GENERATE_SINGLE,
-			async (item) => {
+			COMMANDS.GENERATE_SINGLE_DOC,
+			async (item: IssueItem) => {
 				const key = getApiKey();
 				if (!key) {
 					return;
 				}
-				await vscode.window.withProgress(
-					{
-						location: vscode.ProgressLocation.Notification,
-						title: "Generating...",
-					},
-					async () => {
-						try {
-							await generateDocsForFile(item.resourceUri, key);
-							vscode.window.showInformationMessage("Success!");
-							provider.refresh();
-						} catch (e: any) {
-							vscode.window.showErrorMessage(
-								`Error: ${e.message}`
-							);
-							Logger.error(
-								"Generate Single Failed",
-								"Extension",
-								e
-							);
-						}
-					}
-				);
+				await runWithProgress("Generating Docs...", async () => {
+					await generateDocsForFile(item.resourceUri, key);
+					provider.refresh();
+				});
 			}
 		),
 
-		vscode.commands.registerCommand(COMMANDS.GENERATE_ALL, async () => {
-			const key = getApiKey();
-			if (!key) {
-				return;
-			}
-			const items = provider.getItems();
-			if (items.length === 0) {
-				return vscode.window.showInformationMessage(
-					"No files to update."
-				);
-			}
-
-			if (
-				(await vscode.window.showWarningMessage(
-					`Process ${items.length} files?`,
-					"Yes",
-					"No"
-				)) !== "Yes"
-			) {
-				return;
-			}
-
-			await vscode.window.withProgress(
-				{
-					location: vscode.ProgressLocation.Notification,
-					title: "Batch Update",
-					cancellable: true,
-				},
-				async (p, token) => {
-					let success = 0,
-						fail = 0;
-					for (let i = 0; i < items.length; i++) {
-						if (token.isCancellationRequested) {
-							break;
-						}
-						const item = items[i];
-						p.report({
-							message: `(${i + 1}/${
-								items.length
-							}) ${path.basename(item.resourceUri.fsPath)}`,
-							increment: (1 / items.length) * 100,
-						});
-						try {
-							await generateDocsForFile(item.resourceUri, key);
-							success++;
-						} catch (e: any) {
-							fail++;
-							Logger.error(
-								`Batch fail: ${item.resourceUri.fsPath}`,
-								"Extension",
-								e
-							);
-						}
-					}
-					provider.refresh();
-					vscode.window.showInformationMessage(
-						`Batch complete. Success: ${success}, Fail: ${fail}`
+		vscode.commands.registerCommand(
+			COMMANDS.GENERATE_ALL_DOCS,
+			async () => {
+				const key = getApiKey();
+				if (!key) {
+					return;
+				}
+				const items = provider.getDocFiles();
+				if (items.length === 0) {
+					return vscode.window.showInformationMessage(
+						"No docs to update."
 					);
 				}
-			);
+				if (await confirmAction(items.length)) {
+					await runBatch("Updating Docs", items, async (item) =>
+						generateDocsForFile(item.resourceUri, key)
+					);
+					provider.refresh();
+				}
+			}
+		),
+
+		vscode.commands.registerCommand(
+			COMMANDS.FIX_SINGLE_MARKER,
+			async (item: IssueItem) => {
+				await runWithProgress("Fixing Markers...", async () => {
+					await applyMarkerLogic(item.resourceUri);
+					provider.refresh();
+				});
+			}
+		),
+
+		vscode.commands.registerCommand(COMMANDS.FIX_ALL_MARKERS, async () => {
+			const items = provider.getMarkerFiles();
+			if (items.length === 0) {
+				return vscode.window.showInformationMessage(
+					"No missing markers."
+				);
+			}
+			if (await confirmAction(items.length)) {
+				await runBatch("Fixing Markers", items, async (item) =>
+					applyMarkerLogic(item.resourceUri)
+				);
+				provider.refresh();
+			}
 		})
 	);
 
 	setTimeout(() => provider.refresh(), 1000);
 }
 
-function getApiKey(): string | undefined {
+async function applyMarkerLogic(uri: vscode.Uri) {
+	const filePath = uri.fsPath;
+	const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
+	if (!wsFolder) {
+		return;
+	}
+
+	let rawDiff = await GitService.getWorkingDiff(
+		filePath,
+		wsFolder.uri.fsPath
+	);
+
+	if (!rawDiff || rawDiff.trim().length === 0) {
+		rawDiff = await GitService.getLastCommitDiff(
+			filePath,
+			wsFolder.uri.fsPath
+		);
+	}
+
+	if (!rawDiff) {
+		vscode.window.showInformationMessage(
+			"No logic changes detected to mark."
+		);
+		return;
+	}
+
+	let content = await fs.readFile(filePath, "utf8");
+	const log = await GitService.getLog(filePath, wsFolder.uri.fsPath, 1);
+	const author = log ? log.split("|")[2].substring(0, 5).toUpperCase() : "AI";
+
+	const ticketId = `MOD-${new Date()
+		.toISOString()
+		.slice(2, 10)
+		.replace(/-/g, "")}`;
+
+	content = MarkerService.applyMarkers(content, rawDiff, ticketId, author);
+	await fs.writeFile(filePath, content, "utf8");
+
+	Logger.info(`Markers applied to ${path.basename(filePath)}`, "Extension");
+}
+
+function getApiKey() {
 	const key = vscode.workspace
 		.getConfiguration(CONFIG.SECTION)
 		.get<string>(CONFIG.KEYS.API_KEY);
@@ -138,6 +149,67 @@ function getApiKey(): string | undefined {
 		vscode.window.showErrorMessage("API Key missing.");
 	}
 	return key;
+}
+
+async function runWithProgress(title: string, task: () => Promise<void>) {
+	await vscode.window.withProgress(
+		{ title, location: vscode.ProgressLocation.Notification },
+		async () => {
+			try {
+				await task();
+				vscode.window.showInformationMessage("Success!");
+			} catch (e: any) {
+				vscode.window.showErrorMessage(e.message);
+				Logger.error("Action Failed", "Ext", e);
+			}
+		}
+	);
+}
+
+async function confirmAction(count: number) {
+	return (
+		(await vscode.window.showWarningMessage(
+			`Process ${count} files?`,
+			"Yes",
+			"No"
+		)) === "Yes"
+	);
+}
+
+async function runBatch(
+	title: string,
+	items: IssueItem[],
+	task: (item: IssueItem) => Promise<void>
+) {
+	await vscode.window.withProgress(
+		{
+			title,
+			location: vscode.ProgressLocation.Notification,
+			cancellable: true,
+		},
+		async (p, token) => {
+			let s = 0,
+				f = 0;
+			for (let i = 0; i < items.length; i++) {
+				if (token.isCancellationRequested) {
+					break;
+				}
+				p.report({
+					message: `(${i + 1}/${items.length})`,
+					increment: (1 / items.length) * 100,
+				});
+				try {
+					await task(items[i]);
+					s++;
+				} catch {
+					f++;
+				}
+			}
+			vscode.window.showInformationMessage(
+				`Batch complete. Success: ${s}, Fail: ${f}`
+			);
+		}
+	);
 }
 
 export function deactivate() {}

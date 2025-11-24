@@ -18,44 +18,36 @@ export class PatchService {
 
 		const historyBlockRegex =
 			/(--\s+Date\s+Sign\s+History\r?\n--\s+-{2,}\s+-{2,}\s+-{5,}.*\r?\n)([\s\S]*?)(-{60,})/;
-
 		const match = originalContent.match(historyBlockRegex);
 
 		if (match) {
-			Logger.info(
-				"History Block detected. Reconstructing...",
-				"PatchService"
-			);
-
+			Logger.info("Reconstructing History Block...", "PatchService");
 			const headerPrefix = match[1];
 			const oldHistoryText = match[2];
 			const footer = match[3];
 
 			const existingEntries = this.parseExistingHistory(oldHistoryText);
-
 			const allEntries = [...existingEntries, ...newEntries];
-
 			const finalEntries = this.processEntries(allEntries);
 
 			const newHistoryBlock = finalEntries
 				.map((e) => this.formatLine(e))
 				.join("\n");
 
-			const replacement = `${headerPrefix}${newHistoryBlock}\n${footer}`;
-			return originalContent.replace(historyBlockRegex, replacement);
+			// Reconstruct full block
+			return originalContent.replace(
+				historyBlockRegex,
+				`${headerPrefix}${newHistoryBlock}\n${footer}`
+			);
 		}
 
-		Logger.warn(
-			"Standard History Block not found. Falling back to simple injection.",
-			"PatchService"
-		);
+		// Fallback injection simple
 		return this.simpleInjection(originalContent, newEntries);
 	}
 
 	private static parseExistingHistory(textBlock: string): HistoryEntry[] {
 		const entries: HistoryEntry[] = [];
 		const lines = textBlock.split("\n");
-
 		const lineRegex = /--\s+(\d{6})\s+(\w+)\s+(.*)/;
 
 		for (const line of lines) {
@@ -63,7 +55,6 @@ export class PatchService {
 			if (!cleanLine.startsWith("--")) {
 				continue;
 			}
-
 			const m = cleanLine.match(lineRegex);
 			if (m) {
 				const rawRest = m[3].trim();
@@ -81,13 +72,7 @@ export class PatchService {
 						desc = spaceMatch[2];
 					}
 				}
-
-				entries.push({
-					date: m[1],
-					sign: m[2],
-					id: id,
-					desc: desc,
-				});
+				entries.push({ date: m[1], sign: m[2], id, desc });
 			}
 		}
 		return entries;
@@ -95,16 +80,13 @@ export class PatchService {
 
 	private static processEntries(entries: HistoryEntry[]): HistoryEntry[] {
 		const uniqueMap = new Map<string, HistoryEntry>();
-
 		entries.forEach((e) => {
 			const cleanId = e.id.replace(/[\[\]]/g, "").trim();
 			const cleanDate = e.date.trim();
-
 			const key = `${cleanDate}-${cleanId}`;
 
 			if (uniqueMap.has(key)) {
-				const existing = uniqueMap.get(key)!;
-				if (e.desc.length > existing.desc.length) {
+				if (e.desc.length > uniqueMap.get(key)!.desc.length) {
 					uniqueMap.set(key, { ...e, id: cleanId });
 				}
 			} else {
@@ -112,9 +94,9 @@ export class PatchService {
 			}
 		});
 
-		return Array.from(uniqueMap.values()).sort((a, b) => {
-			return b.date.localeCompare(a.date);
-		});
+		return Array.from(uniqueMap.values()).sort((a, b) =>
+			b.date.localeCompare(a.date)
+		);
 	}
 
 	private static formatLine(e: HistoryEntry): string {
@@ -126,10 +108,8 @@ export class PatchService {
 		entries: HistoryEntry[]
 	): string {
 		entries.forEach((e) => (e.id = e.id.replace(/[\[\]]/g, "")));
-
 		const newLines = entries.map((e) => this.formatLine(e)).join("\n");
 		const separatorRegex = /(--\s+-{2,}\s+-{2,}\s+-{5,}.*)(\r?\n)/;
-
 		if (separatorRegex.test(content)) {
 			return content.replace(separatorRegex, `$1$2${newLines}$2`);
 		}
