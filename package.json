@@ -114,8 +114,12 @@
 				"prasasti.files.include": {
 					"type": "string",
 					"default": "**/*.{plsql,plsvc,views}",
-					"description": "Glob pattern untuk file yang akan dipindai.",
-					"order": 1
+					"description": "Glob pattern untuk generate DOKUMENTASI."
+				},
+				"prasasti.files.includeMarkers": {
+					"type": "string",
+					"default": "**/*.{plsql,plsvc,views,entity,projection,client}",
+					"description": "Glob pattern khusus untuk cek MARKER (Logic Code)."
 				},
 				"prasasti.files.gitSkipKeywords": {
 					"type": "array",

@@ -12,7 +12,6 @@ export enum DocStatus {
 	NO_HEADER,
 	MISSING_MARKERS,
 	UNKNOWN,
-	DIRTY_CODE,
 }
 
 export interface AuditResult {
@@ -22,18 +21,64 @@ export interface AuditResult {
 }
 
 export class AnalysisService {
-	static async analyzeFile(
-		uri: vscode.Uri,
-		skipKeywords: string[]
-	): Promise<AuditResult> {
+	static async analyzeForMarkers(
+		uri: vscode.Uri
+	): Promise<AuditResult | null> {
 		const filePath = uri.fsPath;
 		const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
 		if (!wsFolder) {
-			return {
-				status: DocStatus.UNKNOWN,
-				reason: "No Workspace",
-				resourceUri: uri,
-			};
+			return null;
+		}
+
+		try {
+			let diffToCheck = await GitService.getWorkingDiff(
+				filePath,
+				wsFolder.uri.fsPath
+			);
+			let source = "Unsaved Changes";
+
+			if (!diffToCheck || diffToCheck.trim().length === 0) {
+				diffToCheck = await GitService.getLastCommitDiff(
+					filePath,
+					wsFolder.uri.fsPath
+				);
+				source = "Last Commit";
+			}
+
+			if (diffToCheck && GitService.hasLogicChanges(diffToCheck)) {
+				const content = fs.readFileSync(filePath, "utf8");
+
+				const areMarkersValid = MarkerService.validateMarkers(
+					content,
+					diffToCheck
+				);
+
+				if (!areMarkersValid) {
+					return {
+						status: DocStatus.MISSING_MARKERS,
+						reason: `Logic in ${source} not marked`,
+						resourceUri: uri,
+					};
+				}
+			}
+		} catch (e) {
+			Logger.error(
+				`Marker Analysis Failed: ${path.basename(filePath)}`,
+				"Analysis",
+				e
+			);
+		}
+		return null;
+	}
+
+	static async analyzeForDocs(
+		uri: vscode.Uri,
+		skipKeywords: string[]
+	): Promise<AuditResult | null> {
+		const filePath = uri.fsPath;
+		const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
+		if (!wsFolder) {
+			return null;
 		}
 		const root = wsFolder.uri.fsPath;
 
@@ -46,46 +91,9 @@ export class AnalysisService {
 			};
 		}
 
-		try {
-			let diffToCheck = "";
-			let source = "";
-
-			const workingDiff = await GitService.getWorkingDiff(filePath, root);
-			if (workingDiff && workingDiff.trim().length > 0) {
-				diffToCheck = workingDiff;
-				source = "Unsaved Changes";
-			} else {
-				const lastCommitDiff = await GitService.getLastCommitDiff(
-					filePath,
-					root
-				);
-				if (lastCommitDiff && lastCommitDiff.trim().length > 0) {
-					diffToCheck = lastCommitDiff;
-					source = "Last Commit";
-				}
-			}
-
-			if (diffToCheck && GitService.hasLogicChanges(diffToCheck)) {
-				const content = fs.readFileSync(filePath, "utf8");
-				if (!MarkerService.validateMarkers(content, diffToCheck)) {
-					return {
-						status: DocStatus.MISSING_MARKERS,
-						reason: `Logic in ${source} not marked`,
-						resourceUri: uri,
-					};
-				}
-			}
-		} catch (e: any) {
-			Logger.error(`Marker check failed`, "Analysis", e);
-		}
-
 		const logRaw = await GitService.getLog(filePath, root, 1);
 		if (!logRaw) {
-			return {
-				status: DocStatus.UNKNOWN,
-				reason: "Untracked",
-				resourceUri: uri,
-			};
+			return null;
 		}
 
 		const [hash, gitDate] = logRaw.split("|");
@@ -93,20 +101,12 @@ export class AnalysisService {
 		const headerDateInt = parseInt(headerDate) || 0;
 
 		if (headerDateInt >= gitDateInt) {
-			return {
-				status: DocStatus.SUCCESS,
-				reason: "Up to date",
-				resourceUri: uri,
-			};
+			return null;
 		}
 
 		const commitDiff = await GitService.getDiff(filePath, root, hash);
 		if (!GitService.hasLogicChanges(commitDiff)) {
-			return {
-				status: DocStatus.SUCCESS,
-				reason: "Docs-only update",
-				resourceUri: uri,
-			};
+			return null;
 		}
 
 		return {

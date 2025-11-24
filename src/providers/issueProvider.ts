@@ -11,11 +11,8 @@ export class CategoryItem extends vscode.TreeItem {
 				? vscode.TreeItemCollapsibleState.Expanded
 				: vscode.TreeItemCollapsibleState.None
 		);
-
 		this.contextValue = "category";
-
 		this.iconPath = new vscode.ThemeIcon("folder-opened");
-
 		if (children.length === 0) {
 			this.description = "(Clean)";
 			this.iconPath = new vscode.ThemeIcon(
@@ -72,53 +69,69 @@ export class PrasastiDataManager {
 	public async scanWorkspace() {
 		Logger.info("Scanning workspace...", "Provider");
 		const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
-		const pattern =
-			config.get<string>(CONFIG.KEYS.INCLUDE) || "**/*.{plsql,plsvc}";
+
+		const patternDocs =
+			config.get<string>(CONFIG.KEYS.INCLUDE_DOCS) ||
+			"**/*.{plsql,plsvc}";
+		const patternMarkers =
+			config.get<string>(CONFIG.KEYS.INCLUDE_MARKERS) ||
+			"**/*.{plsql,plsvc}";
 		const skip = config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
 
-		const files = await vscode.workspace.findFiles(
-			pattern,
-			"**/node_modules/**"
-		);
 		const tempMarker: IssueItem[] = [];
 		const tempDocs: IssueItem[] = [];
 
-		const batchSize = 5;
-		for (let i = 0; i < files.length; i += batchSize) {
-			const batch = files.slice(i, i + batchSize);
+		const markerFiles = await vscode.workspace.findFiles(
+			patternMarkers,
+			"**/node_modules/**"
+		);
+		for (const uri of markerFiles) {
+			const res = await AnalysisService.analyzeForMarkers(uri);
+			if (res && res.status === DocStatus.MISSING_MARKERS) {
+				tempMarker.push(
+					new IssueItem(
+						uri,
+						"Missing Markers",
+						"error",
+						res.reason,
+						"marker"
+					)
+				);
+			}
+		}
+
+		const docFiles = await vscode.workspace.findFiles(
+			patternDocs,
+			"**/node_modules/**"
+		);
+		const batchSize = 10;
+		for (let i = 0; i < docFiles.length; i += batchSize) {
+			const batch = docFiles.slice(i, i + batchSize);
 			await Promise.all(
 				batch.map(async (uri) => {
-					const res = await AnalysisService.analyzeFile(uri, skip);
-					if (res.status === DocStatus.MISSING_MARKERS) {
-						tempMarker.push(
-							new IssueItem(
-								uri,
-								"Missing Markers",
-								"error",
-								res.reason,
-								"marker"
-							)
-						);
-					} else if (res.status === DocStatus.OUTDATED) {
-						tempDocs.push(
-							new IssueItem(
-								uri,
-								"Outdated Docs",
-								"warning",
-								res.reason,
-								"docs"
-							)
-						);
-					} else if (res.status === DocStatus.NO_HEADER) {
-						tempDocs.push(
-							new IssueItem(
-								uri,
-								"Missing Header",
-								"error",
-								res.reason,
-								"docs"
-							)
-						);
+					const res = await AnalysisService.analyzeForDocs(uri, skip);
+					if (res) {
+						if (res.status === DocStatus.OUTDATED) {
+							tempDocs.push(
+								new IssueItem(
+									uri,
+									"Outdated Docs",
+									"warning",
+									res.reason,
+									"docs"
+								)
+							);
+						} else if (res.status === DocStatus.NO_HEADER) {
+							tempDocs.push(
+								new IssueItem(
+									uri,
+									"Missing Header",
+									"error",
+									res.reason,
+									"docs"
+								)
+							);
+						}
 					}
 				})
 			);
@@ -143,31 +156,25 @@ export class PrasastiProvider
 	async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
 		if (!element) {
 			const items: vscode.TreeItem[] = [];
-
 			items.push(
 				new CategoryItem(
 					`Marker Issues (${this.manager.markerItems.length})`,
 					this.manager.markerItems
 				)
 			);
-
 			items.push(
 				new CategoryItem(
 					`Doc Issues (${this.manager.docItems.length})`,
 					this.manager.docItems
 				)
 			);
-
 			return items;
 		}
-
 		if (element instanceof CategoryItem) {
 			return element.children;
 		}
-
 		return [];
 	}
-
 	refresh() {
 		this.manager.scanWorkspace();
 	}

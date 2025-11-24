@@ -14,7 +14,12 @@ export class MarkerService {
 	private static MARKER_REGEX = /^\s*--\s+\[.*?\]\s+\w+\s+(Start|End)/i;
 
 	static validateMarkers(content: string, diffOutput: string): boolean {
-		const changes = this.parseDiffToLineNumbers(diffOutput);
+		const lines = content.split(/\r?\n/);
+
+		const changes = this.parseDiffToLineNumbers(diffOutput).filter(
+			(block) => !this.isInsideHeaderOrComment(lines, block)
+		);
+
 		if (changes.length === 0) {
 			return true;
 		}
@@ -42,25 +47,48 @@ export class MarkerService {
 	): string {
 		const lines = originalContent.split(/\r?\n/);
 		const rawChanges = this.parseDiffToLineNumbers(diffOutput);
+
 		if (rawChanges.length === 0) {
 			return originalContent;
 		}
 
-		const changes = this.mergeNearbyChanges(rawChanges, 2);
+		const validChanges = rawChanges.filter(
+			(block) => !this.isInsideHeaderOrComment(lines, block)
+		);
+
+		const changes = this.mergeNearbyChanges(validChanges, 2);
+
 		Logger.info(
-			`Processing ${changes.length} change blocks for markers.`,
+			`Processing ${changes.length} logic blocks for markers.`,
 			"MarkerService"
 		);
 
 		for (let i = changes.length - 1; i >= 0; i--) {
 			const block = changes[i];
+
 			if (this.hasValidMarkers(lines, block)) {
 				continue;
 			}
+
 			this.applyMarkerBlock(lines, block, ticketId, sign);
 		}
 
 		return lines.join("\n");
+	}
+
+	private static isInsideHeaderOrComment(
+		lines: string[],
+		block: ChangeBlock
+	): boolean {
+		const firstLine = lines[block.startLine];
+		if (!firstLine) {
+			return false;
+		}
+
+		if (firstLine.trim().startsWith("--")) {
+			return true;
+		}
+		return false;
 	}
 
 	private static hasValidMarkers(
@@ -72,16 +100,14 @@ export class MarkerService {
 		if (lineBeforeIndex < 0 || lineAfterIndex >= lines.length) {
 			return false;
 		}
-
 		const lineBefore = lines[lineBeforeIndex];
 		const lineAfter = lines[lineAfterIndex];
-
-		const isStartValid =
-			this.MARKER_REGEX.test(lineBefore) && /Start/i.test(lineBefore);
-		const isEndValid =
-			this.MARKER_REGEX.test(lineAfter) && /End/i.test(lineAfter);
-
-		return isStartValid && isEndValid;
+		return (
+			this.MARKER_REGEX.test(lineBefore) &&
+			/Start/i.test(lineBefore) &&
+			this.MARKER_REGEX.test(lineAfter) &&
+			/End/i.test(lineAfter)
+		);
 	}
 
 	private static applyMarkerBlock(
@@ -92,11 +118,16 @@ export class MarkerService {
 	) {
 		const currentLine = lines[block.startLine] || "";
 		const indent = currentLine.match(/^\s*/)?.[0] || "";
-		const startMarker = `${indent}-- [${ticketId}] ${sign} Start`;
-		const endMarker = `${indent}-- [${ticketId}] ${sign} End`;
-
-		lines.splice(block.endLine + 1, 0, endMarker);
-		lines.splice(block.startLine, 0, startMarker);
+		lines.splice(
+			block.endLine + 1,
+			0,
+			`${indent}-- [${ticketId}] ${sign} End`
+		);
+		lines.splice(
+			block.startLine,
+			0,
+			`${indent}-- [${ticketId}] ${sign} Start`
+		);
 	}
 
 	private static findExistingMarkerRanges(content: string): MarkerRange[] {
@@ -105,15 +136,12 @@ export class MarkerService {
 		let currentStart = -1;
 		const startRegex = /--\s+\[.*?\]\s+\w+\s+Start/i;
 		const endRegex = /--\s+\[.*?\]\s+\w+\s+End/i;
-
 		for (let i = 0; i < lines.length; i++) {
 			if (startRegex.test(lines[i])) {
 				currentStart = i;
-			} else if (endRegex.test(lines[i])) {
-				if (currentStart !== -1) {
-					ranges.push({ start: currentStart, end: i });
-					currentStart = -1;
-				}
+			} else if (endRegex.test(lines[i]) && currentStart !== -1) {
+				ranges.push({ start: currentStart, end: i });
+				currentStart = -1;
 			}
 		}
 		return ranges;

@@ -15,7 +15,8 @@ export const CONFIG = {
 	KEYS: {
 		API_KEY: "ai.apiKey",
 		MODEL: "ai.model",
-		INCLUDE: "files.include",
+		INCLUDE_DOCS: "files.include",
+		INCLUDE_MARKERS: "files.includeMarkers",
 		SKIP_KEYWORDS: "files.gitSkipKeywords",
 		AUTO_APPLY: "behavior.autoApply",
 		RETRIES: "network.maxRetries",
