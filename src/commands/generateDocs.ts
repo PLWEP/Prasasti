@@ -199,10 +199,10 @@ function parseTomlOutput(tomlText: string): HistoryEntry[] {
 			currentEntry = {};
 			continue;
 		}
-		const m = t.match(/^(\w+)\s*=\s*"(.*)"$/);
-		if (m) {
-			const k = m[1];
-			const v = m[2];
+		const match = t.match(/^(\w+)\s*=\s*"(.*)"$/);
+		if (match) {
+			const k = match[1];
+			const v = match[2];
 			if (k === "date") {
 				currentEntry.date = v;
 			}
@@ -210,7 +210,7 @@ function parseTomlOutput(tomlText: string): HistoryEntry[] {
 				currentEntry.sign = v;
 			}
 			if (k === "id") {
-				currentEntry.id = v;
+				currentEntry.id = v.replace(/[\[\]]/g, "");
 			}
 			if (k === "desc") {
 				currentEntry.desc = v;

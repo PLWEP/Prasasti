@@ -10,67 +10,129 @@ export interface HistoryEntry {
 export class PatchService {
 	static applyHeaderPatch(
 		originalContent: string,
-		entries: HistoryEntry[]
+		newEntries: HistoryEntry[]
 	): string {
-		if (!entries || entries.length === 0) {
+		if (!newEntries || newEntries.length === 0) {
 			return originalContent;
 		}
 
-		const uniqueEntries = entries.filter((entry) => {
-			const exists = this.checkIfEntryExists(originalContent, entry);
-			if (exists) {
-				Logger.info(
-					`Skipping duplicate history: [${entry.id}]`,
-					"PatchService"
-				);
-			}
-			return !exists;
-		});
+		const historyBlockRegex =
+			/(--\s+Date\s+Sign\s+History\r?\n--\s+-{2,}\s+-{2,}\s+-{5,}.*\r?\n)([\s\S]*?)(-{60,})/;
 
-		if (uniqueEntries.length === 0) {
-			Logger.info("All entries exist. No patch needed.", "PatchService");
-			return originalContent;
-		}
+		const match = originalContent.match(historyBlockRegex);
 
-		const newLinesBlock = uniqueEntries
-			.map((h) => {
-				const d = h.date || "000000";
-				const s = (h.sign || "AI").trim().padEnd(6);
-				const i = h.id || "Patch";
-				const desc = h.desc || "Update";
-				return `--  ${d}  ${s}  [${i}] ${desc}`;
-			})
-			.join("\n");
-
-		const separatorRegex = /(--\s+-{2,}\s+-{2,}\s+-{5,}.*)(\r?\n)/;
-		if (separatorRegex.test(originalContent)) {
-			return originalContent.replace(
-				separatorRegex,
-				`$1$2${newLinesBlock}$2`
+		if (match) {
+			Logger.info(
+				"History Block detected. Reconstructing...",
+				"PatchService"
 			);
+
+			const headerPrefix = match[1];
+			const oldHistoryText = match[2];
+			const footer = match[3];
+
+			const existingEntries = this.parseExistingHistory(oldHistoryText);
+
+			const allEntries = [...existingEntries, ...newEntries];
+
+			const finalEntries = this.processEntries(allEntries);
+
+			const newHistoryBlock = finalEntries
+				.map((e) => this.formatLine(e))
+				.join("\n");
+
+			const replacement = `${headerPrefix}${newHistoryBlock}\n${footer}`;
+			return originalContent.replace(historyBlockRegex, replacement);
 		}
 
-		const historyLabelRegex = /(--\s+Date\s+Sign\s+History.*)(\r?\n)/i;
-		if (historyLabelRegex.test(originalContent)) {
-			return originalContent.replace(
-				historyLabelRegex,
-				`$1$2${newLinesBlock}$2`
-			);
-		}
-
-		Logger.warn("Header pattern not found. Patch skipped.", "PatchService");
-		return originalContent;
+		Logger.warn(
+			"Standard History Block not found. Falling back to simple injection.",
+			"PatchService"
+		);
+		return this.simpleInjection(originalContent, newEntries);
 	}
 
-	private static checkIfEntryExists(
+	private static parseExistingHistory(textBlock: string): HistoryEntry[] {
+		const entries: HistoryEntry[] = [];
+		const lines = textBlock.split("\n");
+
+		const lineRegex = /--\s+(\d{6})\s+(\w+)\s+(.*)/;
+
+		for (const line of lines) {
+			const cleanLine = line.trim();
+			if (!cleanLine.startsWith("--")) {
+				continue;
+			}
+
+			const m = cleanLine.match(lineRegex);
+			if (m) {
+				const rawRest = m[3].trim();
+				let id = "Patch";
+				let desc = rawRest;
+
+				const bracketMatch = rawRest.match(/^\[([^\]]+)\]\s*(.*)/);
+				if (bracketMatch) {
+					id = bracketMatch[1];
+					desc = bracketMatch[2];
+				} else {
+					const spaceMatch = rawRest.match(/^([A-Z0-9\-]+)\s+(.*)/);
+					if (spaceMatch) {
+						id = spaceMatch[1];
+						desc = spaceMatch[2];
+					}
+				}
+
+				entries.push({
+					date: m[1],
+					sign: m[2],
+					id: id,
+					desc: desc,
+				});
+			}
+		}
+		return entries;
+	}
+
+	private static processEntries(entries: HistoryEntry[]): HistoryEntry[] {
+		const uniqueMap = new Map<string, HistoryEntry>();
+
+		entries.forEach((e) => {
+			const cleanId = e.id.replace(/[\[\]]/g, "").trim();
+			const cleanDate = e.date.trim();
+
+			const key = `${cleanDate}-${cleanId}`;
+
+			if (uniqueMap.has(key)) {
+				const existing = uniqueMap.get(key)!;
+				if (e.desc.length > existing.desc.length) {
+					uniqueMap.set(key, { ...e, id: cleanId });
+				}
+			} else {
+				uniqueMap.set(key, { ...e, id: cleanId });
+			}
+		});
+
+		return Array.from(uniqueMap.values()).sort((a, b) => {
+			return b.date.localeCompare(a.date);
+		});
+	}
+
+	private static formatLine(e: HistoryEntry): string {
+		return `--  ${e.date}  ${e.sign.padEnd(6)}  [${e.id}] ${e.desc}`;
+	}
+
+	private static simpleInjection(
 		content: string,
-		entry: HistoryEntry
-	): boolean {
-		const cleanID = entry.id.replace(/[\[\]]/g, "");
-		const regex = new RegExp(
-			`--\\s+${entry.date}\\s+.*\\s+\\[?${cleanID}\\]?`,
-			"i"
-		);
-		return regex.test(content);
+		entries: HistoryEntry[]
+	): string {
+		entries.forEach((e) => (e.id = e.id.replace(/[\[\]]/g, "")));
+
+		const newLines = entries.map((e) => this.formatLine(e)).join("\n");
+		const separatorRegex = /(--\s+-{2,}\s+-{2,}\s+-{5,}.*)(\r?\n)/;
+
+		if (separatorRegex.test(content)) {
+			return content.replace(separatorRegex, `$1$2${newLines}$2`);
+		}
+		return content;
 	}
 }
