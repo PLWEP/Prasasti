@@ -19,47 +19,31 @@ export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 	const content = await fs.readFile(filePath, "utf8");
 	const match = content.match(HEADER_REGEX);
 	let headerDateInt = 0;
-	let sinceDate = "";
 
 	if (match) {
 		headerDateInt = parseInt(match[1]);
-		sinceDate = `20${match[1].substr(0, 2)}-${match[1].substr(
-			2,
-			2
-		)}-${match[1].substr(4, 2)}`;
 	}
 
-	const logs = await GitService.getLog(
-		filePath,
-		wsFolder.uri.fsPath,
-		50,
-		sinceDate
-	);
-
+	const logs = await GitService.getLog(filePath, wsFolder.uri.fsPath, 50);
 	if (!logs) {
-		vscode.window.showInformationMessage(
-			`No new changes found for ${fileName}`
-		);
+		vscode.window.showInformationMessage("No history found.");
 		return;
 	}
 
 	let forensicData = "";
 	const commits = logs.split("\n");
-	let validCommitCount = 0;
+	let validCount = 0;
 
 	for (const line of commits) {
 		if (forensicData.length > 30000) {
 			break;
 		}
-
 		const [hash, date, author] = line.split("|");
 		if (!hash) {
 			continue;
 		}
 
-		const gitDateInt = parseInt(date);
-
-		if (gitDateInt <= headerDateInt) {
+		if (parseInt(date) <= headerDateInt) {
 			continue;
 		}
 
@@ -68,7 +52,6 @@ export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 			wsFolder.uri.fsPath,
 			hash
 		);
-
 		if (!GitService.hasLogicChanges(diff)) {
 			continue;
 		}
@@ -79,15 +62,11 @@ export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 			.join("\n")
 			.substring(0, 5000);
 		forensicData += `=== COMMIT: ${date} by ${author} ===\n${cleanDiff}\n\n`;
-		validCommitCount++;
+		validCount++;
 	}
 
-	if (validCommitCount === 0) {
-		Logger.info(
-			"All commits are older or equal to header date. Skipping.",
-			"Generator"
-		);
-		vscode.window.showInformationMessage("Docs are already up to date.");
+	if (validCount === 0) {
+		vscode.window.showInformationMessage("Docs are up to date.");
 		return;
 	}
 
@@ -96,22 +75,15 @@ export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 
 	try {
 		if (lineCount < LINE_LIMIT_THRESHOLD) {
-			Logger.info(
-				`Full Rewrite Strategy (Changes: ${validCommitCount} commits)`,
-				"Generator"
-			);
 			const fullPrompt = `
 You are a Senior IFS ERP Technical Consultant.
 TASK: REWRITE documentation based on GIT CHANGES.
 OUTPUT: Return FULL PL/SQL CODE.
-
 CURRENT HEADER DATE: ${match ? match[1] : "None"}
 NEW COMMITS TO DOCUMENT:
 ${forensicData}
-
 SOURCE CODE:
 ${content}
-
 RULES:
 1. Update 'History' block. Add entries for the NEW COMMITS above.
 2. Add/Update docstrings for modified methods.
@@ -133,17 +105,12 @@ RULES:
 		}
 	} catch (e: any) {
 		if (e.message === "MAX_TOKENS_LIMIT") {
-			Logger.warn(
-				`Switching to Patching Strategy for ${fileName}`,
-				"Generator"
-			);
+			Logger.warn(`Switching to Patching for ${fileName}`, "Generator");
 			const tomlPrompt = `
 You are a Senior IFS ERP Consultant.
 Task: Generate TOML Header History entries for the following GIT CHANGES.
-
 NEW COMMITS:
 ${forensicData}
-
 INSTRUCTIONS:
 1. Create a TOML entry [[commits]] for EACH commit block above.
 2. Keys: date (YYMMDD), sign, id, desc.
@@ -155,10 +122,6 @@ INSTRUCTIONS:
 
 			const entries = parseTomlOutput(raw);
 			finalContent = PatchService.applyHeaderPatch(content, entries);
-			Logger.info(
-				`Applied ${entries.length} new history entries.`,
-				"Generator"
-			);
 		} else {
 			throw e;
 		}

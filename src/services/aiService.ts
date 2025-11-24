@@ -62,7 +62,6 @@ export class AiService {
 
 				if (response.status === 429) {
 					const delay = Math.pow(2, attempt) * 2000;
-					Logger.warn(`Rate limit. Retry in ${delay}ms`, "AI");
 					await new Promise((r) => setTimeout(r, delay));
 					attempt++;
 					continue;
@@ -74,20 +73,14 @@ export class AiService {
 				const json: any = await response.json();
 
 				if (json.promptFeedback?.blockReason) {
-					Logger.error(
-						`BLOCKED: ${json.promptFeedback.blockReason}`,
-						"AI"
-					);
 					return null;
 				}
-
 				if (!json.candidates || json.candidates.length === 0) {
 					return null;
 				}
-				const candidate = json.candidates[0];
 
+				const candidate = json.candidates[0];
 				if (candidate.finishReason === "MAX_TOKENS") {
-					Logger.warn("AI Response Truncated (MAX_TOKENS).", "AI");
 					throw new Error("MAX_TOKENS_LIMIT");
 				}
 
@@ -97,7 +90,6 @@ export class AiService {
 					throw e;
 				}
 				attempt++;
-				Logger.error("API Error", "AI", e.message);
 				if (attempt >= retries) {
 					return null;
 				}

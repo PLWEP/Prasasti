@@ -5,9 +5,24 @@ import { Logger } from "../utils/logger";
 
 export class CategoryItem extends vscode.TreeItem {
 	constructor(label: string, public readonly children: IssueItem[]) {
-		super(label, vscode.TreeItemCollapsibleState.Expanded);
+		super(
+			label,
+			children.length > 0
+				? vscode.TreeItemCollapsibleState.Expanded
+				: vscode.TreeItemCollapsibleState.None
+		);
+
 		this.contextValue = "category";
+
 		this.iconPath = new vscode.ThemeIcon("folder-opened");
+
+		if (children.length === 0) {
+			this.description = "(Clean)";
+			this.iconPath = new vscode.ThemeIcon(
+				"check",
+				new vscode.ThemeColor("testing.iconPassed")
+			);
+		}
 	}
 }
 
@@ -128,29 +143,31 @@ export class PrasastiProvider
 	async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
 		if (!element) {
 			const items: vscode.TreeItem[] = [];
-			if (this.manager.markerItems.length > 0) {
-				items.push(
-					new CategoryItem(
-						`Marker Issues (${this.manager.markerItems.length})`,
-						this.manager.markerItems
-					)
-				);
-			}
-			if (this.manager.docItems.length > 0) {
-				items.push(
-					new CategoryItem(
-						`Doc Issues (${this.manager.docItems.length})`,
-						this.manager.docItems
-					)
-				);
-			}
+
+			items.push(
+				new CategoryItem(
+					`Marker Issues (${this.manager.markerItems.length})`,
+					this.manager.markerItems
+				)
+			);
+
+			items.push(
+				new CategoryItem(
+					`Doc Issues (${this.manager.docItems.length})`,
+					this.manager.docItems
+				)
+			);
+
 			return items;
 		}
+
 		if (element instanceof CategoryItem) {
 			return element.children;
 		}
+
 		return [];
 	}
+
 	refresh() {
 		this.manager.scanWorkspace();
 	}

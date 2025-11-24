@@ -21,7 +21,6 @@ export class PatchService {
 		const match = originalContent.match(historyBlockRegex);
 
 		if (match) {
-			Logger.info("Reconstructing History Block...", "PatchService");
 			const headerPrefix = match[1];
 			const oldHistoryText = match[2];
 			const footer = match[3];
@@ -33,15 +32,12 @@ export class PatchService {
 			const newHistoryBlock = finalEntries
 				.map((e) => this.formatLine(e))
 				.join("\n");
-
-			// Reconstruct full block
 			return originalContent.replace(
 				historyBlockRegex,
 				`${headerPrefix}${newHistoryBlock}\n${footer}`
 			);
 		}
 
-		// Fallback injection simple
 		return this.simpleInjection(originalContent, newEntries);
 	}
 

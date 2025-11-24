@@ -1,23 +1,20 @@
 import * as vscode from "vscode";
-import * as fs from "fs/promises";
-import * as path from "path";
 import {
 	PrasastiDataManager,
 	PrasastiProvider,
 	IssueItem,
 } from "./providers/issueProvider";
 import { generateDocsForFile } from "./commands/generateDocs";
-import { MarkerService } from "./services/markerService";
-import { GitService } from "./services/gitService";
+import { fixMarkersForFile } from "./commands/fixMarker";
 import { COMMANDS, CONFIG, VIEWS } from "./constants";
 import { Logger } from "./utils/logger";
+import * as path from "path";
 
 export function activate(context: vscode.ExtensionContext) {
 	Logger.info("Prasasti Extension Activated.");
 
 	const dataManager = PrasastiDataManager.getInstance();
 	dataManager.setContext(context.workspaceState);
-
 	const provider = new PrasastiProvider();
 	const treeView = vscode.window.createTreeView(VIEWS.PROBLEMS, {
 		treeDataProvider: provider,
@@ -75,7 +72,7 @@ export function activate(context: vscode.ExtensionContext) {
 			COMMANDS.FIX_SINGLE_MARKER,
 			async (item: IssueItem) => {
 				await runWithProgress("Fixing Markers...", async () => {
-					await applyMarkerLogic(item.resourceUri);
+					await fixMarkersForFile(item.resourceUri);
 					provider.refresh();
 				});
 			}
@@ -90,7 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			if (await confirmAction(items.length)) {
 				await runBatch("Fixing Markers", items, async (item) =>
-					applyMarkerLogic(item.resourceUri)
+					fixMarkersForFile(item.resourceUri)
 				);
 				provider.refresh();
 			}
@@ -98,47 +95,6 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	setTimeout(() => provider.refresh(), 1000);
-}
-
-async function applyMarkerLogic(uri: vscode.Uri) {
-	const filePath = uri.fsPath;
-	const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
-	if (!wsFolder) {
-		return;
-	}
-
-	let rawDiff = await GitService.getWorkingDiff(
-		filePath,
-		wsFolder.uri.fsPath
-	);
-
-	if (!rawDiff || rawDiff.trim().length === 0) {
-		rawDiff = await GitService.getLastCommitDiff(
-			filePath,
-			wsFolder.uri.fsPath
-		);
-	}
-
-	if (!rawDiff) {
-		vscode.window.showInformationMessage(
-			"No logic changes detected to mark."
-		);
-		return;
-	}
-
-	let content = await fs.readFile(filePath, "utf8");
-	const log = await GitService.getLog(filePath, wsFolder.uri.fsPath, 1);
-	const author = log ? log.split("|")[2].substring(0, 5).toUpperCase() : "AI";
-
-	const ticketId = `MOD-${new Date()
-		.toISOString()
-		.slice(2, 10)
-		.replace(/-/g, "")}`;
-
-	content = MarkerService.applyMarkers(content, rawDiff, ticketId, author);
-	await fs.writeFile(filePath, content, "utf8");
-
-	Logger.info(`Markers applied to ${path.basename(filePath)}`, "Extension");
 }
 
 function getApiKey() {

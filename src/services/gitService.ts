@@ -1,5 +1,4 @@
 import * as cp from "child_process";
-import { Logger } from "../utils/logger";
 
 const STRUCTURAL_KEYWORDS = [
 	"CURSOR",
@@ -96,6 +95,22 @@ export class GitService {
 			return await this.spawnAsync(args, root);
 		} catch {
 			return "";
+		}
+	}
+
+	static async getRawDiff(filePath: string, root: string): Promise<string> {
+		return this.getWorkingDiff(filePath, root);
+	}
+
+	static async isDirty(filePath: string, root: string): Promise<boolean> {
+		try {
+			await this.spawnAsync(
+				["diff", "--quiet", "HEAD", "--", filePath],
+				root
+			);
+			return false;
+		} catch {
+			return true;
 		}
 	}
 

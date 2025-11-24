@@ -27,9 +27,7 @@ export class AnalysisService {
 		skipKeywords: string[]
 	): Promise<AuditResult> {
 		const filePath = uri.fsPath;
-		const fileName = path.basename(filePath);
 		const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
-
 		if (!wsFolder) {
 			return {
 				status: DocStatus.UNKNOWN,
@@ -53,7 +51,6 @@ export class AnalysisService {
 			let source = "";
 
 			const workingDiff = await GitService.getWorkingDiff(filePath, root);
-
 			if (workingDiff && workingDiff.trim().length > 0) {
 				diffToCheck = workingDiff;
 				source = "Unsaved Changes";
@@ -70,16 +67,7 @@ export class AnalysisService {
 
 			if (diffToCheck && GitService.hasLogicChanges(diffToCheck)) {
 				const content = fs.readFileSync(filePath, "utf8");
-				const areMarkersValid = MarkerService.validateMarkers(
-					content,
-					diffToCheck
-				);
-
-				if (!areMarkersValid) {
-					Logger.warn(
-						`[${fileName}] Missing Markers in ${source}.`,
-						"Analysis"
-					);
+				if (!MarkerService.validateMarkers(content, diffToCheck)) {
 					return {
 						status: DocStatus.MISSING_MARKERS,
 						reason: `Logic in ${source} not marked`,
@@ -88,7 +76,7 @@ export class AnalysisService {
 				}
 			}
 		} catch (e: any) {
-			Logger.error(`Marker check failed for ${fileName}`, "Analysis", e);
+			Logger.error(`Marker check failed`, "Analysis", e);
 		}
 
 		const logRaw = await GitService.getLog(filePath, root, 1);
@@ -123,7 +111,7 @@ export class AnalysisService {
 
 		return {
 			status: DocStatus.OUTDATED,
-			reason: `Outdated (Header:${headerDateInt} < Git:${gitDateInt})`,
+			reason: `Outdated (H:${headerDateInt} < G:${gitDateInt})`,
 			resourceUri: uri,
 		};
 	}
