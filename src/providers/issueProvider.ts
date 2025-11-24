@@ -28,118 +28,98 @@ export class PrasastiDataManager {
 
 	public async scanWorkspace() {
 		Logger.info("Scanning workspace...", "Provider");
-
 		const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
-		const includePattern =
+		const pattern =
 			config.get<string>(CONFIG.KEYS.INCLUDE) ||
 			"**/*.{plsql,plsvc,views}";
-		const skipKeywords =
-			config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
+		const skip = config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
 
 		const files = await vscode.workspace.findFiles(
-			includePattern,
+			pattern,
 			"**/node_modules/**"
 		);
 		const tempItems: IssueItem[] = [];
 
-		const processFile = async (uri: vscode.Uri) => {
-			const result = await AnalysisService.analyzeFile(uri, skipKeywords);
-
-			if (result.status === DocStatus.OUTDATED) {
-				tempItems.push(
-					new IssueItem(
-						uri,
-						"Outdated Documentation",
-						"warning",
-						result.reason
-					)
-				);
-			} else if (result.status === DocStatus.NO_HEADER) {
-				tempItems.push(
-					new IssueItem(uri, "Missing Header", "error", result.reason)
-				);
-			} else if (result.status === DocStatus.DIRTY_CODE) {
-				tempItems.push(
-					new IssueItem(
-						uri,
-						"Unsaved Changes",
-						"warning",
-						result.reason
-					)
-				);
-			}
-		};
-
-		const CONCURRENCY = 10;
-		for (let i = 0; i < files.length; i += CONCURRENCY) {
-			await Promise.all(files.slice(i, i + CONCURRENCY).map(processFile));
+		const batchSize = 5;
+		for (let i = 0; i < files.length; i += batchSize) {
+			const batch = files.slice(i, i + batchSize);
+			await Promise.all(
+				batch.map(async (uri) => {
+					const res = await AnalysisService.analyzeFile(uri, skip);
+					if (res.status === DocStatus.OUTDATED) {
+						tempItems.push(
+							new IssueItem(
+								uri,
+								"Outdated",
+								"warning",
+								res.reason
+							)
+						);
+					}
+					if (res.status === DocStatus.NO_HEADER) {
+						tempItems.push(
+							new IssueItem(
+								uri,
+								"Missing Header",
+								"error",
+								res.reason
+							)
+						);
+					}
+				})
+			);
 		}
 
 		this.problemItems = tempItems;
 		this.onDidChangeData.fire();
-		Logger.info(
-			`Scan complete. Found ${tempItems.length} issues.`,
-			"Provider"
-		);
 	}
 
-	public getProblemFiles() {
+	public getItems() {
 		return this.problemItems;
 	}
 }
 
 export class PrasastiProvider implements vscode.TreeDataProvider<IssueItem> {
-	private dataManager = PrasastiDataManager.getInstance();
-	readonly onDidChangeTreeData = this.dataManager.onDidChangeData.event;
+	private manager = PrasastiDataManager.getInstance();
+	readonly onDidChangeTreeData = this.manager.onDidChangeData.event;
 
 	getTreeItem(element: IssueItem): vscode.TreeItem {
 		return element;
 	}
-
 	async getChildren(element?: IssueItem): Promise<IssueItem[]> {
-		if (!element) {
-			return this.dataManager.problemItems;
-		}
-		return [];
+		return element ? [] : this.manager.problemItems;
 	}
-
-	public refresh() {
-		this.dataManager.scanWorkspace();
+	refresh() {
+		this.manager.scanWorkspace();
 	}
-
-	public getItems(): IssueItem[] {
-		return this.dataManager.getProblemFiles();
+	getItems() {
+		return this.manager.getItems();
 	}
 }
 
 export class IssueItem extends vscode.TreeItem {
 	constructor(
 		public readonly resourceUri: vscode.Uri,
-		public readonly description: string,
-		public readonly type: "error" | "warning",
-		public readonly debugReason: string
+		label: string,
+		type: "error" | "warning",
+		reason: string
 	) {
 		super(resourceUri, vscode.TreeItemCollapsibleState.None);
-
-		this.tooltip = `${this.description}\nDetails: ${this.debugReason}`;
+		this.description = label;
+		this.tooltip = `${label}: ${reason}`;
 		this.contextValue = "issueItem";
-
-		if (type === "error") {
-			this.iconPath = new vscode.ThemeIcon(
-				"error",
-				new vscode.ThemeColor("testing.iconFailed")
-			);
-		} else {
-			this.iconPath = new vscode.ThemeIcon(
-				"alert",
-				new vscode.ThemeColor("problemsWarningIcon.foreground")
-			);
-		}
-
+		this.iconPath = new vscode.ThemeIcon(
+			type === "error" ? "error" : "alert",
+			new vscode.ThemeColor(
+				type === "error"
+					? "testing.iconFailed"
+					: "problemsWarningIcon.foreground"
+			)
+		);
 		this.command = {
 			command: "vscode.open",
-			title: "Open File",
-			arguments: [this.resourceUri],
+			title: "Open",
+			arguments: [resourceUri],
 		};
 	}
 }

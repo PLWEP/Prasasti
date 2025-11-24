@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as os from "os";
 import { GitService } from "../services/gitService";
 import { AiService } from "../services/aiService";
 import { PatchService, HistoryEntry } from "../services/patchService";
@@ -30,7 +31,6 @@ export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 		20,
 		sinceDate
 	);
-
 	if (!logs) {
 		vscode.window.showInformationMessage(
 			`No new changes found for ${fileName}`
@@ -40,10 +40,8 @@ export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 
 	let forensicData = "";
 	const commits = logs.split("\n");
-	const MAX_FORENSIC_CHARS = 30000;
-
 	for (const line of commits) {
-		if (forensicData.length > MAX_FORENSIC_CHARS) {
+		if (forensicData.length > 30000) {
 			break;
 		}
 		const [hash, date, author] = line.split("|");
@@ -64,70 +62,9 @@ export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 	}
 
 	let finalContent = "";
-
 	try {
-		Logger.info(
-			`Attempting Strategy A: Full Rewrite for ${fileName}`,
-			"Generator"
-		);
-		finalContent = await executeFullRewrite(
-			fileName,
-			forensicData,
-			content,
-			apiKey
-		);
-	} catch (error: any) {
-		if (error.message === "MAX_TOKENS_LIMIT") {
-			Logger.warn(
-				`Strategy A failed (File too large). Switching to Strategy B: TOML Patching.`,
-				"Generator"
-			);
-
-			try {
-				finalContent = await executeSurgicalPatch(
-					fileName,
-					forensicData,
-					content,
-					apiKey
-				);
-			} catch (patchError: any) {
-				throw new Error(
-					`Both strategies failed. Patch details: ${patchError.message}`
-				);
-			}
-		} else {
-			throw error;
-		}
-	}
-
-	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
-	const autoApply = config.get<boolean>(CONFIG.KEYS.AUTO_APPLY);
-
-	if (autoApply) {
-		await fs.writeFile(filePath, finalContent, "utf8");
-		Logger.info(`Successfully updated ${fileName}`, "Generator");
-	} else {
-		const tempPath = path.join(
-			require("os").tmpdir(),
-			`prasasti_${fileName}`
-		);
-		await fs.writeFile(tempPath, finalContent, "utf8");
-		await vscode.commands.executeCommand(
-			"vscode.diff",
-			uri,
-			vscode.Uri.file(tempPath),
-			`AI Review: ${fileName}`
-		);
-	}
-}
-
-async function executeFullRewrite(
-	filename: string,
-	forensic: string,
-	content: string,
-	apiKey: string
-): Promise<string> {
-	const fullPrompt = `
+		Logger.info(`Attempting Full Rewrite for ${fileName}`, "Generator");
+		const fullPrompt = `
 You are a Senior IFS ERP Technical Consultant. Your task is to UPDATE documentation based on NEW GIT CHANGES.
 
 INPUTS:
@@ -167,33 +104,32 @@ RULES:
 8. CRITICAL: The string '$SEARCH' and any text after that must remain intact.
 9. IMPORTANT: Do not delete any system-level logging calls, including any function starting with 'Log_Sys.' or 'Dbms_Output'. These are required system functions.
 
-FORENSIC GIT HISTORY for '${filename}':
-${forensic}
+FORENSIC GIT HISTORY for '${fileName}':
+${forensicData}
 
-SOURCE CODE for '${filename}':
+SOURCE CODE for '${fileName}':
 ${content}
 `;
-	const result = await AiService.generateDocs(fullPrompt, apiKey, false);
+		const result = await AiService.generateDocs(fullPrompt, apiKey, false);
+		if (!result) {
+			throw new Error("Empty Full Rewrite result");
+		}
+		finalContent = result
+			.replace(/^```(sql|plsql)?\s*/i, "")
+			.replace(/```$/, "");
+	} catch (e: any) {
+		if (e.message === "MAX_TOKENS_LIMIT") {
+			Logger.warn(
+				`Full Rewrite failed (File too large). Switching to TOML Patching.`,
+				"Generator"
+			);
 
-	if (!result) {
-		throw new Error("Empty content received from Full Rewrite.");
-	}
-
-	return result.replace(/^```(sql|plsql)?\s*/i, "").replace(/```$/, "");
-}
-
-async function executeSurgicalPatch(
-	filename: string,
-	forensic: string,
-	originalContent: string,
-	apiKey: string
-): Promise<string> {
-	const tomlPrompt = `
+			const tomlPrompt = `
 You are a Senior IFS ERP Consultant.
-Task: Analyze GIT CHANGES for '${filename}' and generate Header History entries for EACH commit.
+Task: Analyze GIT CHANGES for '${fileName}' and generate Header History entries for EACH commit.
 
 GIT FORENSIC DATA:
-${forensic}
+${forensicData}
 
 INSTRUCTIONS:
 1. Analyze ALL commits provided in the forensic data.
@@ -216,48 +152,57 @@ sign = "BOB"
 id = "SC-1100"
 desc = "Fixed null pointer exception"
 `;
-	const rawResult = await AiService.generateDocs(tomlPrompt, apiKey, false);
+			const raw = await AiService.generateDocs(tomlPrompt, apiKey, false);
+			if (!raw) {
+				throw new Error("Empty Patch result");
+			}
 
-	if (!rawResult) {
-		throw new Error("Empty content received from Patching.");
+			const entries = parseTomlOutput(raw);
+			finalContent = PatchService.applyHeaderPatch(content, entries);
+			Logger.info(
+				`Surgical patch applied: ${entries.length} entries.`,
+				"Generator"
+			);
+		} else {
+			throw e;
+		}
 	}
 
-	const historyEntries = parseTomlOutput(rawResult);
-	if (historyEntries.length === 0) {
-		throw new Error("No valid TOML entries found.");
+	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
+	if (config.get<boolean>(CONFIG.KEYS.AUTO_APPLY)) {
+		await fs.writeFile(filePath, finalContent, "utf8");
+	} else {
+		const tempPath = path.join(os.tmpdir(), `prasasti_${fileName}`);
+		await fs.writeFile(tempPath, finalContent, "utf8");
+		await vscode.commands.executeCommand(
+			"vscode.diff",
+			uri,
+			vscode.Uri.file(tempPath),
+			`AI Review: ${fileName}`
+		);
 	}
-
-	const patchedContent = PatchService.applyHeaderPatch(
-		originalContent,
-		historyEntries
-	);
-	Logger.info(
-		`Surgical patch applied: ${historyEntries.length} entries.`,
-		"Generator"
-	);
-
-	return patchedContent;
 }
 
 function parseTomlOutput(tomlText: string): HistoryEntry[] {
 	const entries: HistoryEntry[] = [];
 	let currentEntry: Partial<HistoryEntry> = {};
-	const cleanText = tomlText.replace(/```toml|```/g, "").trim();
-	const lines = cleanText.split("\n");
-
+	const lines = tomlText
+		.replace(/```toml|```/g, "")
+		.trim()
+		.split("\n");
 	for (const line of lines) {
-		const trimmed = line.trim();
-		if (trimmed.startsWith("[[commits]]")) {
+		const t = line.trim();
+		if (t.startsWith("[[commits]]")) {
 			if (Object.keys(currentEntry).length > 0) {
 				entries.push(currentEntry as HistoryEntry);
 			}
 			currentEntry = {};
 			continue;
 		}
-		const match = trimmed.match(/^(\w+)\s*=\s*"(.*)"$/);
-		if (match) {
-			const k = match[1];
-			const v = match[2];
+		const m = t.match(/^(\w+)\s*=\s*"(.*)"$/);
+		if (m) {
+			const k = m[1];
+			const v = m[2];
 			if (k === "date") {
 				currentEntry.date = v;
 			}

@@ -1,5 +1,3 @@
-export const CONFIG_SECTION = "prasasti";
-
 export const COMMANDS = {
 	REFRESH: "prasasti.refresh",
 	GENERATE_ALL: "prasasti.generateAll",
@@ -23,3 +21,5 @@ export const CONFIG = {
 };
 
 export const HEADER_REGEX = /--\s+(\d{6})\s+[\w\d]+/;
+
+export const LINE_LIMIT_THRESHOLD = 600;

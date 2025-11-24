@@ -46,8 +46,7 @@ export class AnalysisService {
 			};
 		}
 
-		const isDirty = await GitService.isDirty(filePath, root);
-		if (isDirty) {
+		if (await GitService.isDirty(filePath, root)) {
 			const diff = await GitService.getDiff(filePath, root);
 			if (GitService.hasLogicChanges(diff)) {
 				return {
@@ -63,7 +62,7 @@ export class AnalysisService {
 			};
 		}
 
-		const logRaw = await GitService.getLog(filePath, root);
+		const logRaw = await GitService.getLog(filePath, root, 1);
 		if (!logRaw) {
 			return {
 				status: DocStatus.UNKNOWN,
@@ -72,7 +71,7 @@ export class AnalysisService {
 			};
 		}
 
-		const [hash, gitDate, author, subject] = logRaw.split("|");
+		const [hash, gitDate, author] = logRaw.split("|");
 		const gitDateInt = parseInt(gitDate) || 0;
 		const headerDateInt = parseInt(headerDate) || 0;
 
@@ -84,22 +83,10 @@ export class AnalysisService {
 			};
 		}
 
-		if (this.shouldSkip(subject, skipKeywords)) {
-			Logger.info(
-				`Skipping ${fileName} due to keyword match.`,
-				"Analysis"
-			);
-			return {
-				status: DocStatus.SUCCESS,
-				reason: "Keyword skipped",
-				resourceUri: uri,
-			};
-		}
-
 		const commitDiff = await GitService.getDiff(filePath, root, hash);
 		if (!GitService.hasLogicChanges(commitDiff)) {
 			Logger.info(
-				`Skipping ${fileName} - Commit was docs only.`,
+				`Skipping ${fileName} - Docs/Comment update only.`,
 				"Analysis"
 			);
 			return {
@@ -120,17 +107,12 @@ export class AnalysisService {
 		try {
 			const buffer = Buffer.alloc(8192);
 			const fd = fs.openSync(filePath, "r");
-			const read = fs.readSync(fd, buffer, 0, 8192, 0);
+			fs.readSync(fd, buffer, 0, 8192, 0);
 			fs.closeSync(fd);
-			const match = buffer.slice(0, read).toString().match(HEADER_REGEX);
+			const match = buffer.toString().match(HEADER_REGEX);
 			return match ? match[1] : null;
 		} catch {
 			return null;
 		}
-	}
-
-	private static shouldSkip(subject: string, keywords: string[]): boolean {
-		const upperSubject = (subject || "").toUpperCase();
-		return keywords.some((k) => upperSubject.includes(k.toUpperCase()));
 	}
 }

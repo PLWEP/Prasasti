@@ -1,106 +1,107 @@
-# 🏛️ Prasasti: Automation Documentation
+# Prasasti - AI Documentation Assistant for IFS ERP
 
-> **"Stop writing lazy commit messages. Let AI tell the true history."**
+**Prasasti** adalah ekstensi VS Code yang dirancang khusus untuk Technical Consultant IFS ERP. Ekstensi ini mengotomatisasi proses dokumentasi kode legacy (PL/SQL) dengan menggunakan kekuatan **Google Gemini AI** dan **Git Forensic Analysis**.
 
-**Prasasti** is an intelligent VS Code extension designed specifically for **IFS ERP Technical Consultants**. It automates the tedious process of documenting `.plsql`, and `.plsvc` files by performing **Forensic Analysis** on your Git history using Google Gemini AI.
-
----
-
-## ✨ Features
-
-### 🕵️‍♂️ Forensic Documentation
-
-Prasasti doesn't trust commit messages. It reads the **Raw Git Diff** to understand exactly what logic changed in your code.
-
--   **Result:** Accurate, business-logic-focused documentation (e.g., _"Updated tax calculation logic from 10% to 11%"_) instead of generic messages like _"fix bug"_.
-
-### ⚡ Smart Auditing
-
--   **Real-time Monitoring:** Automatically detects when a file's header is older than its last Git commit.
--   **Smart Dirty Check:** Ignores changes that are just comments or whitespace. It only alerts you when **Logic** has changed.
--   **Native Caching:** Blazing fast performance. Scans huge repositories in seconds after the initial run.
-
-### 🛠️ Legacy Friendly
-
--   **Respects History:** It preserves your old manual documentation.
--   **Standardization:** Automatically reformats messy legacy markers (e.g., `-- 050519 ERW Start`) into a clean, standardized format.
-
-### 🚀 Productivity Boosters
-
--   **Single Click Fix:** Generate documentation for one file or the entire project with a single click.
--   **Incremental Updates:** AI intelligently reads only the _new_ commits since the last update to save tokens and time.
--   **Diff Preview:** Option to review AI-generated changes before applying them.
+Tidak perlu lagi menulis History Header atau Docstring secara manual. Prasasti membaca perubahan Git (`diff`), menganalisis dampaknya, dan menulis dokumentasi untuk Anda.
 
 ---
 
-## 📸 Screenshots
+## 🚀 Key Features
 
-### 1. The Dashboard
+### 🧠 1. Smart Fallback Strategy (Hybrid Engine)
 
-Files needing attention appear automatically in the **Prasasti Activity Bar**.
+Prasasti memiliki kecerdasan adaptif untuk menangani berbagai ukuran file:
 
-> _(Place a screenshot of your Sidebar here)_
+-   **Strategy A: Full Rewrite (Untuk File Kecil/Sedang)**
+    -   AI menulis ulang seluruh file, merapikan format, dan menambahkan dokumentasi lengkap.
+    -   Menghasilkan kode yang sangat bersih dan konsisten.
+-   **Strategy B: Surgical Patching (Untuk File Besar/Raksasa)**
+    -   Jika file terlalu besar (menyebabkan limit `MAX_TOKENS`), sistem otomatis beralih ke mode _Surgical Patching_.
+    -   AI hanya menganalisis history dan mengembalikan data ringkas (format TOML).
+    -   Ekstensi menyuntikkan (_inject_) baris history baru ke header tanpa menyentuh logika kode asli. **100% Aman dari kode terpotong.**
 
-### 2. Diagnostic Tooltip
+### 🔍 2. Git Forensic Analysis
 
-Hover over a file to see exactly _why_ it is flagged.
+-   Menganalisis commit Git terbaru sejak terakhir kali file didokumentasikan.
+-   Secara cerdas membedakan antara perubahan logika (kode) vs perubahan kosmetik (spasi/komentar).
+-   Menghindari duplikasi history header.
 
-> _(Place a screenshot of the hover tooltip here)_
+### 🛡️ 3. Robust & Resilient
 
----
+-   **Auto Retry:** Otomatis mencoba ulang jika terkena Rate Limit Google API (HTTP 429).
+-   **Safety Bypass:** Dikonfigurasi untuk tidak memblokir kode SQL (perintah `DROP`, `GRANT`, `EXECUTE`) yang sering dianggap "berbahaya" oleh filter AI standar.
+-   **Defensive Parsing:** Menangani respon AI yang tidak konsisten (Array vs Object) agar ekstensi tidak crash.
 
-## ⚙️ Getting Started
+### ⚡ 4. Batch Processing
 
-### 1. Prerequisites
-
--   **Git** must be installed and initialized in your workspace.
--   A **Google Gemini API Key** (Get it for free at [Google AI Studio](https://aistudio.google.com/)).
-
-### 2. Installation
-
-Install the `.vsix` file or download from the Marketplace.
-
-### 3. Setup
-
-1.  Open VS Code Settings (`Ctrl + ,`).
-2.  Search for `Prasasti`.
-3.  Enter your **Api Key**.
-
-That's it! Open any IFS project folder, and Prasasti will start auditing.
+-   **Generate All:** Mendeteksi seluruh file di workspace yang dokumentasinya _outdated_ atau _missing header_, lalu memprosesnya satu per satu dengan progress bar visual.
 
 ---
 
-## 🔧 Extension Settings
+## ⚙️ How It Works
 
-| Setting                  | Default                    | Description                                                                              |
-| :----------------------- | :------------------------- | :--------------------------------------------------------------------------------------- |
-| `prasasti.apiKey`        | `""`                       | **Required.** Your Google Gemini API Key.                                                |
-| `prasasti.includedFiles` | `**/*.{plsql,apv,apy,sql}` | Glob pattern for files to audit.                                                         |
-| `prasasti.autoApply`     | `true`                     | If `true`, AI overwrites the file immediately. If `false`, opens a Diff View for review. |
-| `prasasti.maxRetries`    | `3`                        | Number of retries if the API hits a Rate Limit.                                          |
-
----
-
-## 📖 How It Works
-
-1.  **Code & Commit:** You modify a `.plsql` file and commit it to Git.
-2.  **Detect:** Prasasti detects that the Git Commit Date is newer than the File Header Date.
-3.  **Alert:** The file appears in the "Attention Needed" sidebar with a Yellow icon.
-4.  **Generate:** You click the **Sparkle (✨)** icon.
-    -   Prasasti fetches the Git Diff since the last update.
-    -   Sends context to Gemini AI.
-    -   Updates the File Header and adds Docstrings to methods.
-5.  **Done:** The file is removed from the list.
+1.  **Scan:** Ekstensi memindai workspace mencari file `.plsql`, `.plsvc`, atau `.views`.
+2.  **Audit:** Membandingkan tanggal di Header File (`-- YYMMDD`) dengan tanggal commit terakhir di Git.
+3.  **Generate:**
+    -   Mengambil _diff_ dari commit-commit baru.
+    -   Mengirim _prompt_ ke Google Gemini.
+    -   Jika file besar, otomatis menggunakan mode hemat token (TOML/JSON).
+4.  **Apply:**
+    -   Jika `autoApply: true`, file langsung disimpan.
+    -   Jika `autoApply: false`, membuka tampilan "Diff View" untuk review manual.
 
 ---
 
-## ⚠️ Disclaimer
+## 📦 Installation & Setup
 
-This tool uses Generative AI to modify your source code. While it includes safety prompts to strictly preserve logic:
-
--   Always review the changes (use `prasasti.autoApply: false` for safety).
--   Commit your work before running the generator.
+1.  Install ekstensi di VS Code.
+2.  Dapatkan **Google Gemini API Key** (Gratis via Google AI Studio).
+3.  Buka **Settings** (`Ctrl+,`) -> Cari **Prasasti**.
+4.  Masukkan API Key Anda di kolom `Prasasti > Ai: Api Key`.
 
 ---
 
-**Enjoy coding, let Prasasti handle the history.** 🗿
+## 🔧 Configuration
+
+Berikut adalah pengaturan yang tersedia di `settings.json`:
+
+| ID                               | Default                  | Deskripsi                                                                               |
+| :------------------------------- | :----------------------- | :-------------------------------------------------------------------------------------- |
+| `prasasti.ai.apiKey`             | `""`                     | **(Wajib)** Google Gemini API Key.                                                      |
+| `prasasti.ai.model`              | `gemini-1.5-flash`       | Model AI yang digunakan (flash lebih cepat & murah).                                    |
+| `prasasti.files.include`         | `**/*.{plsql,plsvc}`     | Glob pattern untuk file yang akan di-scan.                                              |
+| `prasasti.files.gitSkipKeywords` | `["Docs Only", "Typos"]` | Daftar kata kunci commit message yang akan diabaikan (dianggap sudah didokumentasikan). |
+| `prasasti.behavior.autoApply`    | `true`                   | `true`: Langsung timpa file. `false`: Buka Diff View.                                   |
+| `prasasti.network.maxRetries`    | `3`                      | Jumlah percobaan ulang jika koneksi gagal/rate limit.                                   |
+
+---
+
+## 🎮 Commands
+
+Buka **Command Palette** (`Ctrl+Shift+P`) dan ketik:
+
+-   `Prasasti: Refresh List`: Memindai ulang workspace untuk mencari file yang outdated.
+-   `Prasasti: Generate All Docs`: Memproses semua file yang bermasalah secara batch.
+-   `Prasasti: Regenerate Single Doc`: (Klik kanan pada file di Sidebar Prasasti) Memproses satu file spesifik.
+
+---
+
+## ⚠️ Requirements
+
+-   **Git** harus terinstall dan terdaftar di PATH system Anda.
+-   Project harus berada dalam repositori Git.
+
+---
+
+## 📝 Release Notes
+
+### 2.0.0
+
+-   Initial release with Smart Fallback Strategy.
+-   Support for TOML/JSON patching for large files.
+-   Robust Error Handling & Retry Mechanism.
+-   Batch Processing support.
+
+---
+
+**Enjoy coding, let AI handle the docs!** 🚀

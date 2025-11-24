@@ -17,7 +17,7 @@ export async function handleGenerateAll(
 		return promptToOpenSettings("Gemini API Key is missing.");
 	}
 
-	const filesToFix = dataManager.getProblemFiles();
+	const filesToFix = dataManager.getItems();
 	if (filesToFix.length === 0) {
 		vscode.window.showInformationMessage("No files need updates!");
 		return;

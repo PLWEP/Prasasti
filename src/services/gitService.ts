@@ -1,21 +1,5 @@
 import * as cp from "child_process";
-import * as util from "util";
 import { Logger } from "../utils/logger";
-
-const execAsync = util.promisify(cp.exec);
-const spawnAsync = (args: string[], cwd: string): Promise<string> => {
-	return new Promise((resolve, reject) => {
-		const child = cp.spawn("git", args, { cwd, shell: false });
-		let stdout = "",
-			stderr = "";
-		child.stdout.on("data", (d) => (stdout += d.toString()));
-		child.stderr.on("data", (d) => (stderr += d.toString()));
-		child.on("close", (code) =>
-			code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr))
-		);
-		child.on("error", reject);
-	});
-};
 
 const STRUCTURAL_KEYWORDS = [
 	"CURSOR",
@@ -33,30 +17,45 @@ const STRUCTURAL_KEYWORDS = [
 	"FUNCTION",
 	"PROCEDURE",
 	"PRAGMA",
+	"TYPE",
+	"CONSTANT",
 ];
 
 export class GitService {
+	private static spawnAsync(args: string[], cwd: string): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const child = cp.spawn("git", args, { cwd, shell: false });
+			let stdout = "",
+				stderr = "";
+			child.stdout.on("data", (d) => (stdout += d.toString()));
+			child.stderr.on("data", (d) => (stderr += d.toString()));
+			child.on("close", (code) =>
+				code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr))
+			);
+			child.on("error", reject);
+		});
+	}
+
 	static async getLog(
 		filePath: string,
 		root: string,
-		limit = 1,
+		limit = 20,
 		sinceDate?: string
-	) {
+	): Promise<string | null> {
 		const args = [
 			"log",
 			`-${limit}`,
 			"--date=format:%y%m%d",
-			"--pretty=format:%H|%ad|%an|%s",
+			"--pretty=format:%H|%ad|%an",
 			"--",
 			filePath,
 		];
 		if (sinceDate) {
-			args.push(`--since=${sinceDate}`);
+			args.push(`--since=${sinceDate} 00:00:00`);
 		}
-
 		try {
-			return await spawnAsync(args, root);
-		} catch (e) {
+			return await this.spawnAsync(args, root);
+		} catch {
 			return null;
 		}
 	}
@@ -69,12 +68,23 @@ export class GitService {
 		const args = hash
 			? ["show", "--format=", "-U0", hash, "--", filePath]
 			: ["diff", "-U0", "HEAD", "--", filePath];
-
 		try {
-			return await spawnAsync(args, root);
-		} catch (e) {
-			Logger.error("Git Diff failed", "GitService", e);
+			return await this.spawnAsync(args, root);
+		} catch (e: any) {
+			Logger.warn(`Git diff failed: ${e.message}`, "GitService");
 			return "";
+		}
+	}
+
+	static async isDirty(filePath: string, root: string): Promise<boolean> {
+		try {
+			await this.spawnAsync(
+				["diff", "--quiet", "HEAD", "--", filePath],
+				root
+			);
+			return false;
+		} catch {
+			return true;
 		}
 	}
 
@@ -104,14 +114,5 @@ export class GitService {
 			return true;
 		}
 		return false;
-	}
-
-	static async isDirty(filePath: string, root: string): Promise<boolean> {
-		try {
-			await spawnAsync(["diff", "--quiet", "HEAD", "--", filePath], root);
-			return false;
-		} catch {
-			return true;
-		}
 	}
 }

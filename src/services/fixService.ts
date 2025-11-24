@@ -5,7 +5,7 @@ import * as util from "util";
 import * as path from "path";
 import * as os from "os";
 import { Logger } from "../utils/logger";
-import { CONFIG_SECTION } from "../constants";
+import { CONFIG } from "../constants";
 
 const execAsync = util.promisify(cp.exec);
 
@@ -14,9 +14,9 @@ export async function runAiScriptForFile(
 	workspaceRoot: string,
 	apiKey: string
 ): Promise<void> {
-	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-	const model = config.get<string>("ai.model") || "gemini-1.5-flash";
-	const autoApply = config.get<boolean>("behavior.autoApply") ?? true;
+	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
+	const model = config.get<string>(CONFIG.KEYS.MODEL) || "gemini-1.5-flash";
+	const autoApply = config.get<boolean>(CONFIG.KEYS.AUTO_APPLY) ?? true;
 
 	let originalContent = "";
 	try {
@@ -144,8 +144,8 @@ async function callGeminiWithRetry(
 		"Content-Type": "application/json",
 	};
 
-	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-	const maxRetries = config.get<number>("network.maxRetries") || 3;
+	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
+	const maxRetries = config.get<number>(CONFIG.KEYS.RETRIES) || 3;
 
 	let attempt = 0;
 

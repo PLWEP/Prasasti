@@ -18,9 +18,9 @@ export class AiService {
 		while (attempt < retries) {
 			try {
 				Logger.info(
-					`[AI] Sending Request (Mode: ${
+					`[AI] Sending Request (${model}). Mode: ${
 						isJsonMode ? "JSON" : "Text"
-					}). Attempt ${attempt + 1}`,
+					}. Attempt ${attempt + 1}`,
 					"AI"
 				);
 
@@ -62,7 +62,7 @@ export class AiService {
 
 				if (response.status === 429) {
 					const delay = Math.pow(2, attempt) * 2000;
-					Logger.warn(`Rate limit. Retry in ${delay}ms`, "AI");
+					Logger.warn(`Rate limit hit. Sleeping ${delay}ms`, "AI");
 					await new Promise((r) => setTimeout(r, delay));
 					attempt++;
 					continue;
@@ -75,12 +75,16 @@ export class AiService {
 				const json: any = await response.json();
 
 				if (json.promptFeedback?.blockReason) {
-					return null;
-				}
-				if (!json.candidates || json.candidates.length === 0) {
+					Logger.error(
+						`BLOCKED: ${json.promptFeedback.blockReason}`,
+						"AI"
+					);
 					return null;
 				}
 
+				if (!json.candidates || json.candidates.length === 0) {
+					return null;
+				}
 				const candidate = json.candidates[0];
 
 				if (candidate.finishReason === "MAX_TOKENS") {
@@ -88,11 +92,7 @@ export class AiService {
 					throw new Error("MAX_TOKENS_LIMIT");
 				}
 
-				if (!candidate.content?.parts?.[0]?.text) {
-					return null;
-				}
-
-				return candidate.content.parts[0].text;
+				return candidate.content?.parts?.[0]?.text || null;
 			} catch (e: any) {
 				if (e.message === "MAX_TOKENS_LIMIT") {
 					throw e;

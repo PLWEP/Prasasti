@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { CONFIG_SECTION } from "../constants";
+import { CONFIG } from "../constants";
 
 export function getApiKey(): string | undefined {
-	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-	return config.get<string>("ai.apiKey");
+	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
+	return config.get<string>(CONFIG.KEYS.API_KEY);
 }
 
 export async function checkSettingsOnStartup() {
@@ -23,7 +23,7 @@ export async function promptToOpenSettings(message: string) {
 	if (selection === "Open Settings") {
 		vscode.commands.executeCommand(
 			"workbench.action.openSettings",
-			`@ext:${CONFIG_SECTION}`
+			`@ext:${CONFIG.SECTION}`
 		);
 	}
 }

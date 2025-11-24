@@ -17,21 +17,18 @@ export class PatchService {
 		}
 
 		const uniqueEntries = entries.filter((entry) => {
-			const isDuplicate = this.checkIfEntryExists(originalContent, entry);
-			if (isDuplicate) {
+			const exists = this.checkIfEntryExists(originalContent, entry);
+			if (exists) {
 				Logger.info(
 					`Skipping duplicate history: [${entry.id}]`,
 					"PatchService"
 				);
 			}
-			return !isDuplicate;
+			return !exists;
 		});
 
 		if (uniqueEntries.length === 0) {
-			Logger.info(
-				"All entries match existing history. No patch needed.",
-				"PatchService"
-			);
+			Logger.info("All entries exist. No patch needed.", "PatchService");
 			return originalContent;
 		}
 
@@ -46,7 +43,6 @@ export class PatchService {
 			.join("\n");
 
 		const separatorRegex = /(--\s+-{2,}\s+-{2,}\s+-{5,}.*)(\r?\n)/;
-
 		if (separatorRegex.test(originalContent)) {
 			return originalContent.replace(
 				separatorRegex,
@@ -62,6 +58,7 @@ export class PatchService {
 			);
 		}
 
+		Logger.warn("Header pattern not found. Patch skipped.", "PatchService");
 		return originalContent;
 	}
 
@@ -70,12 +67,10 @@ export class PatchService {
 		entry: HistoryEntry
 	): boolean {
 		const cleanID = entry.id.replace(/[\[\]]/g, "");
-
 		const regex = new RegExp(
 			`--\\s+${entry.date}\\s+.*\\s+\\[?${cleanID}\\]?`,
 			"i"
 		);
-
 		return regex.test(content);
 	}
 }
