@@ -1,14 +1,5 @@
 import { Logger } from "../utils/logger";
-
-interface ChangeBlock {
-	startLine: number;
-	endLine: number;
-}
-
-interface MarkerRange {
-	start: number;
-	end: number;
-}
+import { ChangeBlock, MarkerRange } from "../utils/interfaces";
 
 export class MarkerService {
 	private static MARKER_REGEX = /^\s*--\s+\[.*?\]\s+\w+\s+(Start|End)/i;
@@ -16,11 +7,23 @@ export class MarkerService {
 	static validateMarkers(content: string, diffOutput: string): boolean {
 		const lines = content.split(/\r?\n/);
 
-		const changes = this.parseDiffToLineNumbers(diffOutput).filter(
-			(block) => !this.isInsideHeaderOrComment(lines, block)
+		const rawChanges = this.parseDiffToLineNumbers(diffOutput);
+		if (rawChanges.length === 0) {
+			return true;
+		}
+
+		// PERBAIKAN LOGIC FILTER:
+		// Hanya buang blok yang ISINYA MURNI KOMENTAR/SPASI.
+		// Jika ada 1 baris kode saja, blok itu WAJIB dicek.
+		const changes = rawChanges.filter(
+			(block) => !this.isPureCommentBlock(lines, block)
 		);
 
 		if (changes.length === 0) {
+			Logger.info(
+				"Diff detected but ignored (comments/whitespace only).",
+				"MarkerService"
+			);
 			return true;
 		}
 
@@ -32,7 +35,19 @@ export class MarkerService {
 					change.startLine >= marker.start &&
 					change.endLine <= marker.end
 			);
+
 			if (!isCovered) {
+				// Debugging: Tampilkan baris mana yang bocor
+				const leakContent = lines
+					.slice(change.startLine, change.endLine + 1)
+					.join("\n")
+					.trim();
+				Logger.warn(
+					`Unmarked Code Detected at lines ${change.startLine + 1}-${
+						change.endLine + 1
+					}:\n${leakContent}`,
+					"MarkerService"
+				);
 				return false;
 			}
 		}
@@ -47,50 +62,69 @@ export class MarkerService {
 	): string {
 		const lines = originalContent.split(/\r?\n/);
 		const rawChanges = this.parseDiffToLineNumbers(diffOutput);
-
 		if (rawChanges.length === 0) {
 			return originalContent;
 		}
 
+		// Filter blok komentar murni
 		const validChanges = rawChanges.filter(
-			(block) => !this.isInsideHeaderOrComment(lines, block)
+			(block) => !this.isPureCommentBlock(lines, block)
 		);
-
 		const changes = this.mergeNearbyChanges(validChanges, 2);
-
-		Logger.info(
-			`Processing ${changes.length} logic blocks for markers.`,
-			"MarkerService"
-		);
 
 		for (let i = changes.length - 1; i >= 0; i--) {
 			const block = changes[i];
-
 			if (this.hasValidMarkers(lines, block)) {
 				continue;
 			}
-
 			this.applyMarkerBlock(lines, block, ticketId, sign);
 		}
 
 		return lines.join("\n");
 	}
 
-	private static isInsideHeaderOrComment(
+	/**
+	 * LOGIC BARU: Cek apakah blok perubahan HANYA berisi komentar/spasi?
+	 * Return TRUE jika aman untuk di-skip (bukan logic).
+	 * Return FALSE jika ada kode logic (jangan di-skip).
+	 */
+	private static isPureCommentBlock(
 		lines: string[],
 		block: ChangeBlock
 	): boolean {
-		const firstLine = lines[block.startLine];
-		if (!firstLine) {
+		for (let i = block.startLine; i <= block.endLine; i++) {
+			const line = (lines[i] || "").trim();
+
+			// 1. Skip baris kosong
+			if (line.length === 0) {
+				continue;
+			}
+
+			// 2. Skip baris komentar (-- atau //)
+			if (
+				line.startsWith("--") ||
+				line.startsWith("//") ||
+				line.startsWith("/*")
+			) {
+				continue;
+			}
+
+			// 3. Skip baris yang berisi Marker itu sendiri (biar gak recursive)
+			if (this.MARKER_REGEX.test(line)) {
+				continue;
+			}
+
+			// KETEMU KODE! (Bukan spasi, bukan komentar, bukan marker)
+			// Blok ini mengandung Logic -> TIDAK BOLEH DI-SKIP.
 			return false;
 		}
 
-		if (firstLine.trim().startsWith("--")) {
-			return true;
-		}
-		return false;
+		// Sampai akhir loop isinya cuma komentar/spasi -> Boleh di-skip.
+		return true;
 	}
 
+	// ... (Sisa fungsi hasValidMarkers, applyMarkerBlock, dll TETAP SAMA) ...
+	// Copy paste fungsi private lainnya dari kode sebelumnya
 	private static hasValidMarkers(
 		lines: string[],
 		block: ChangeBlock

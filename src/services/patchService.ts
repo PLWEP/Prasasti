@@ -1,11 +1,4 @@
-import { Logger } from "../utils/logger";
-
-export interface HistoryEntry {
-	date: string;
-	sign: string;
-	id: string;
-	desc: string;
-}
+import { HistoryEntry } from "../utils/interfaces";
 
 export class PatchService {
 	static applyHeaderPatch(

@@ -1,0 +1,38 @@
+import { DocStatus } from "../utils/enums";
+import { Uri } from "vscode";
+
+export interface HistoryEntry {
+	date: string;
+	sign: string;
+	id: string;
+	desc: string;
+}
+
+export interface ChangeBlock {
+	startLine: number;
+	endLine: number;
+}
+
+export interface MarkerRange {
+	start: number;
+	end: number;
+}
+
+export interface Result {
+	status: DocStatus;
+	reason: string;
+	resourceUri: Uri;
+}
+
+export interface CommitInfo {
+	hash: string;
+	date: string;
+	author: string;
+	type: "ADD" | "MOD";
+}
+
+export interface BlameInfo {
+	hash?: string;
+	blameAuthor?: string;
+	content?: string;
+}

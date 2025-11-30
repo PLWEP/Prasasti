@@ -2,28 +2,33 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { GitService } from "./gitService";
-import { MarkerService } from "./markerService";
 import { HEADER_REGEX } from "../constants";
 import { Logger } from "../utils/logger";
-
-export enum DocStatus {
-	SUCCESS,
-	OUTDATED,
-	NO_HEADER,
-	MISSING_MARKERS,
-	UNKNOWN,
-}
-
-export interface AuditResult {
-	status: DocStatus;
-	reason: string;
-	resourceUri: vscode.Uri;
-}
+import { DocStatus } from "../utils/enums";
+import { Result } from "../utils/interfaces";
+import { getMarkerDate } from "../commands/generateMarkers";
 
 export class AnalysisService {
+	static async analyzeUncommit(): Promise<string[]> {
+		const wsFolder = vscode.workspace.workspaceFolders;
+		if (!wsFolder) {
+			return [];
+		}
+
+		try {
+			const root = wsFolder[0].uri.fsPath;
+			return await GitService.getUncommitFile(root);
+		} catch (e) {
+			Logger.error(`Uncommit Analysis Failed`, "Analysis", e);
+		}
+		return [];
+	}
+
 	static async analyzeForMarkers(
-		uri: vscode.Uri
-	): Promise<AuditResult | null> {
+		uri: vscode.Uri,
+		skip: string[],
+		markerScanOption: string
+	): Promise<Result | null> {
 		const filePath = uri.fsPath;
 		const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
 		if (!wsFolder) {
@@ -31,35 +36,47 @@ export class AnalysisService {
 		}
 
 		try {
-			let diffToCheck = await GitService.getWorkingDiff(
-				filePath,
-				wsFolder.uri.fsPath
-			);
-			let source = "Unsaved Changes";
+			const root = wsFolder.uri.fsPath;
 
-			if (!diffToCheck || diffToCheck.trim().length === 0) {
-				diffToCheck = await GitService.getLastCommitDiff(
+			const fileDatesList = getMarkerDate(filePath);
+			var gitDatesList: string[] = [];
+			fileDatesList.sort();
+			const lastDate =
+				fileDatesList.length > 0
+					? fileDatesList[fileDatesList.length - 1]
+					: undefined;
+
+			if (markerScanOption === "Full Scan" || !lastDate) {
+				gitDatesList = await GitService.getMarkerDate(
 					filePath,
-					wsFolder.uri.fsPath
+					root,
+					skip
 				);
-				source = "Last Commit";
+			} else {
+				gitDatesList = await GitService.getMarkerDate(
+					filePath,
+					root,
+					skip,
+					lastDate
+				);
 			}
 
-			if (diffToCheck && GitService.hasLogicChanges(diffToCheck)) {
-				const content = fs.readFileSync(filePath, "utf8");
+			const missingDates: string[] = [];
 
-				const areMarkersValid = MarkerService.validateMarkers(
-					content,
-					diffToCheck
-				);
-
-				if (!areMarkersValid) {
-					return {
-						status: DocStatus.MISSING_MARKERS,
-						reason: `Logic in ${source} not marked`,
-						resourceUri: uri,
-					};
+			gitDatesList.forEach((gitDate) => {
+				if (!fileDatesList.includes(gitDate)) {
+					missingDates.push(gitDate);
 				}
+			});
+
+			if (missingDates.length > 0) {
+				const missingStr = missingDates.sort().join(", ");
+
+				return {
+					status: DocStatus.MISSING_MARKERS,
+					reason: `Missing markers for dates: ${missingStr}`,
+					resourceUri: uri,
+				};
 			}
 		} catch (e) {
 			Logger.error(
@@ -74,7 +91,7 @@ export class AnalysisService {
 	static async analyzeForDocs(
 		uri: vscode.Uri,
 		skipKeywords: string[]
-	): Promise<AuditResult | null> {
+	): Promise<Result | null> {
 		const filePath = uri.fsPath;
 		const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
 		if (!wsFolder) {
@@ -116,7 +133,7 @@ export class AnalysisService {
 		};
 	}
 
-	private static getHeaderDate(filePath: string): string | null {
+	private static getHeaderDateString(filePath: string): string | null {
 		try {
 			const buffer = Buffer.alloc(8192);
 			const fd = fs.openSync(filePath, "r");
@@ -127,5 +144,9 @@ export class AnalysisService {
 		} catch {
 			return null;
 		}
+	}
+
+	private static getHeaderDate(filePath: string): string | null {
+		return this.getHeaderDateString(filePath);
 	}
 }

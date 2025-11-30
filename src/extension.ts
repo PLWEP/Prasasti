@@ -2,13 +2,12 @@ import * as vscode from "vscode";
 import {
 	PrasastiDataManager,
 	PrasastiProvider,
-	IssueItem,
 } from "./providers/issueProvider";
 import { generateDocsForFile } from "./commands/generateDocs";
-import { fixMarkersForFile } from "./commands/fixMarker";
+import { generateMarkers } from "./commands/generateMarkers";
 import { COMMANDS, CONFIG, VIEWS } from "./constants";
 import { Logger } from "./utils/logger";
-import * as path from "path";
+import { IssueItem } from "./utils/treeItems";
 
 export function activate(context: vscode.ExtensionContext) {
 	Logger.info("Prasasti Extension Activated.");
@@ -71,8 +70,8 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(
 			COMMANDS.FIX_SINGLE_MARKER,
 			async (item: IssueItem) => {
-				await runWithProgress("Fixing Markers...", async () => {
-					await fixMarkersForFile(item.resourceUri);
+				await runWithProgress("Generating Markers...", async () => {
+					await generateMarkers(item.resourceUri);
 					provider.refresh();
 				});
 			}
@@ -87,7 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			if (await confirmAction(items.length)) {
 				await runBatch("Fixing Markers", items, async (item) =>
-					fixMarkersForFile(item.resourceUri)
+					generateMarkers(item.resourceUri)
 				);
 				provider.refresh();
 			}

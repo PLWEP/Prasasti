@@ -4,9 +4,10 @@ import * as path from "path";
 import * as os from "os";
 import { GitService } from "../services/gitService";
 import { AiService } from "../services/aiService";
-import { PatchService, HistoryEntry } from "../services/patchService";
+import { PatchService } from "../services/patchService";
 import { CONFIG, HEADER_REGEX, LINE_LIMIT_THRESHOLD } from "../constants";
 import { Logger } from "../utils/logger";
+import { HistoryEntry } from "../utils/interfaces";
 
 export async function generateDocsForFile(uri: vscode.Uri, apiKey: string) {
 	const filePath = uri.fsPath;

@@ -1,0 +1,7 @@
+export enum DocStatus {
+	SUCCESS,
+	OUTDATED,
+	NO_HEADER,
+	MISSING_MARKERS,
+	UNKNOWN,
+}

@@ -1,55 +1,9 @@
 import * as vscode from "vscode";
-import { AnalysisService, DocStatus } from "../services/analysisService";
+import { AnalysisService } from "../services/analysisService";
 import { CONFIG } from "../constants";
 import { Logger } from "../utils/logger";
-
-export class CategoryItem extends vscode.TreeItem {
-	constructor(label: string, public readonly children: IssueItem[]) {
-		super(
-			label,
-			children.length > 0
-				? vscode.TreeItemCollapsibleState.Expanded
-				: vscode.TreeItemCollapsibleState.None
-		);
-		this.contextValue = "category";
-		this.iconPath = new vscode.ThemeIcon("folder-opened");
-		if (children.length === 0) {
-			this.description = "(Clean)";
-			this.iconPath = new vscode.ThemeIcon(
-				"check",
-				new vscode.ThemeColor("testing.iconPassed")
-			);
-		}
-	}
-}
-
-export class IssueItem extends vscode.TreeItem {
-	constructor(
-		public readonly resourceUri: vscode.Uri,
-		label: string,
-		type: "error" | "warning",
-		reason: string,
-		contextType: "marker" | "docs"
-	) {
-		super(resourceUri, vscode.TreeItemCollapsibleState.None);
-		this.description = label;
-		this.tooltip = `${label}: ${reason}`;
-		this.contextValue = contextType;
-		this.iconPath = new vscode.ThemeIcon(
-			type === "error" ? "error" : "alert",
-			new vscode.ThemeColor(
-				type === "error"
-					? "testing.iconFailed"
-					: "problemsWarningIcon.foreground"
-			)
-		);
-		this.command = {
-			command: "vscode.open",
-			title: "Open",
-			arguments: [resourceUri],
-		};
-	}
-}
+import { DocStatus } from "../utils/enums";
+import { IssueItem, CategoryItem } from "../utils/treeItems";
 
 export class PrasastiDataManager {
 	private static instance: PrasastiDataManager;
@@ -77,16 +31,31 @@ export class PrasastiDataManager {
 			config.get<string>(CONFIG.KEYS.INCLUDE_MARKERS) ||
 			"**/*.{plsql,plsvc}";
 		const skip = config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
+		const markersScanOption =
+			config.get<string>(CONFIG.KEYS.MARKER_SCAN) || "Max Scan";
 
 		const tempMarker: IssueItem[] = [];
 		const tempDocs: IssueItem[] = [];
 
-		const markerFiles = await vscode.workspace.findFiles(
-			patternMarkers,
-			"**/node_modules/**"
+		Logger.info("Scanning Uncommit Files...", "Provider");
+		const skipUncommitFiles: string[] =
+			await AnalysisService.analyzeUncommit();
+
+		Logger.info(
+			`Scanning Markers with option: ${markersScanOption}...`,
+			"Provider"
 		);
+		const markerFiles = await vscode.workspace.findFiles(patternMarkers);
 		for (const uri of markerFiles) {
-			const res = await AnalysisService.analyzeForMarkers(uri);
+			const fileName = uri.fsPath.split(/[\\/]/).pop() ?? "";
+			if (skipUncommitFiles.includes(fileName)) {
+				continue;
+			}
+			const res = await AnalysisService.analyzeForMarkers(
+				uri,
+				skip,
+				markersScanOption
+			);
 			if (res && res.status === DocStatus.MISSING_MARKERS) {
 				tempMarker.push(
 					new IssueItem(
@@ -100,41 +69,37 @@ export class PrasastiDataManager {
 			}
 		}
 
-		const docFiles = await vscode.workspace.findFiles(
-			patternDocs,
-			"**/node_modules/**"
-		);
-		const batchSize = 10;
-		for (let i = 0; i < docFiles.length; i += batchSize) {
-			const batch = docFiles.slice(i, i + batchSize);
-			await Promise.all(
-				batch.map(async (uri) => {
-					const res = await AnalysisService.analyzeForDocs(uri, skip);
-					if (res) {
-						if (res.status === DocStatus.OUTDATED) {
-							tempDocs.push(
-								new IssueItem(
-									uri,
-									"Outdated Docs",
-									"warning",
-									res.reason,
-									"docs"
-								)
-							);
-						} else if (res.status === DocStatus.NO_HEADER) {
-							tempDocs.push(
-								new IssueItem(
-									uri,
-									"Missing Header",
-									"error",
-									res.reason,
-									"docs"
-								)
-							);
-						}
-					}
-				})
-			);
+		Logger.info("Scanning Docs...", "Provider");
+		const docFiles = await vscode.workspace.findFiles(patternDocs);
+		for (const uri of docFiles) {
+			const fileName = uri.fsPath.split(/[\\/]/).pop() ?? "";
+			if (skipUncommitFiles.includes(fileName)) {
+				continue;
+			}
+			const res = await AnalysisService.analyzeForDocs(uri, skip);
+			if (res) {
+				if (res.status === DocStatus.OUTDATED) {
+					tempDocs.push(
+						new IssueItem(
+							uri,
+							"Outdated Docs",
+							"warning",
+							res.reason,
+							"docs"
+						)
+					);
+				} else if (res.status === DocStatus.NO_HEADER) {
+					tempDocs.push(
+						new IssueItem(
+							uri,
+							"Missing Header",
+							"error",
+							res.reason,
+							"docs"
+						)
+					);
+				}
+			}
 		}
 
 		this.markerItems = tempMarker;
@@ -159,13 +124,13 @@ export class PrasastiProvider
 			items.push(
 				new CategoryItem(
 					`Marker Issues (${this.manager.markerItems.length})`,
-					this.manager.markerItems
+					this.manager.markerItems.sort()
 				)
 			);
 			items.push(
 				new CategoryItem(
 					`Doc Issues (${this.manager.docItems.length})`,
-					this.manager.docItems
+					this.manager.docItems.sort()
 				)
 			);
 			return items;
@@ -179,9 +144,9 @@ export class PrasastiProvider
 		this.manager.scanWorkspace();
 	}
 	getMarkerFiles() {
-		return this.manager.markerItems;
+		return this.manager.markerItems.sort();
 	}
 	getDocFiles() {
-		return this.manager.docItems;
+		return this.manager.docItems.sort();
 	}
 }
