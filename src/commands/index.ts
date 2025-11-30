@@ -1,12 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import {
-	PrasastiDataManager,
-	PrasastiProvider,
-} from "../providers/issueProvider";
+import { PrasastiProvider } from "../providers/issueProvider";
 import { runAiScriptForFile } from "../services/fixService";
 import { getApiKey, promptToOpenSettings } from "../utils/config";
 import { Logger } from "../utils/logger";
+import { PrasastiDataManager } from "../managers/dataManager";
 
 export async function handleGenerateAll(
 	dataManager: PrasastiDataManager,

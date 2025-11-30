@@ -1,8 +1,5 @@
 import * as vscode from "vscode";
-import {
-	PrasastiDataManager,
-	PrasastiProvider,
-} from "./providers/issueProvider";
+import { PrasastiProvider } from "./providers/issueProvider";
 import { generateDocsForFile } from "./commands/generateDocs";
 import { generateMarkers } from "./commands/generateMarkers";
 import { COMMANDS, CONFIG, VIEWS } from "./constants";
@@ -10,10 +7,6 @@ import { Logger } from "./utils/logger";
 import { IssueItem } from "./utils/treeItems";
 
 export function activate(context: vscode.ExtensionContext) {
-	Logger.info("Prasasti Extension Activated.");
-
-	const dataManager = PrasastiDataManager.getInstance();
-	dataManager.setContext(context.workspaceState);
 	const provider = new PrasastiProvider();
 	const treeView = vscode.window.createTreeView(VIEWS.PROBLEMS, {
 		treeDataProvider: provider,

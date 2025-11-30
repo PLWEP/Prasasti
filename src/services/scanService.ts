@@ -8,8 +8,8 @@ import { DocStatus } from "../utils/enums";
 import { Result } from "../utils/interfaces";
 import { getMarkerDate } from "../commands/generateMarkers";
 
-export class AnalysisService {
-	static async analyzeUncommit(): Promise<string[]> {
+export class scanService {
+	static async scanUncommitFiles(): Promise<string[]> {
 		const wsFolder = vscode.workspace.workspaceFolders;
 		if (!wsFolder) {
 			return [];
@@ -24,7 +24,7 @@ export class AnalysisService {
 		return [];
 	}
 
-	static async analyzeForMarkers(
+	static async scanMarkerFiles(
 		uri: vscode.Uri,
 		skip: string[],
 		markerScanOption: string
@@ -88,7 +88,7 @@ export class AnalysisService {
 		return null;
 	}
 
-	static async analyzeForDocs(
+	static async scanDocumentationFiles(
 		uri: vscode.Uri,
 		skipKeywords: string[]
 	): Promise<Result | null> {
