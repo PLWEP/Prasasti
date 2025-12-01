@@ -62,7 +62,7 @@ export class GitService {
 
 		try {
 			const output = await this.spawnAsync(
-				maxDate ? fullArgs : maxArgs,
+				maxDate ? maxArgs : fullArgs,
 				root
 			);
 			const dates = output

@@ -39,7 +39,7 @@ export class scanService {
 			const root = wsFolder.uri.fsPath;
 
 			const fileDatesList = getMarkerDate(filePath);
-			var gitDatesList: string[] = [];
+			let gitDatesList: string[] = [];
 			fileDatesList.sort();
 			const lastDate =
 				fileDatesList.length > 0

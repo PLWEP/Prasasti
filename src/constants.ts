@@ -27,5 +27,5 @@ export const CONFIG = {
 export const HEADER_REGEX = /--\s+(\d{6})\s+[\w\d]+/;
 export const LINE_LIMIT_THRESHOLD = 600;
 export const CODE_SEPARATOR = "layer Cust;";
-export const MARKER_REGEX = /--\s*[\w\d_]+.*/g;
+export const MARKER_REGEX = /--\s*(?:20)?(\d{6})/g;
 export const CODE_SEPARATOR_REGEX = /layer\s+\w+\s*;/i;
