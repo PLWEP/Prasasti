@@ -8,13 +8,13 @@ export function refreshHandler(provider: PrasastiProvider) {
 	provider.refresh();
 }
 
-export async function generateMarker(
+export async function generateMarkerHandler(
 	item: IssueItem,
 	provider: PrasastiProvider
 ) {
 	await runWithProgress("Generating Markers...", async () => {
 		await generateMarkers(item.resourceUri);
-		provider.refresh();
+		provider.removeMarkerFile(item);
 	});
 }
 

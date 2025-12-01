@@ -5,7 +5,7 @@ import { generateMarkers } from "./commands/generateMarkers";
 import { COMMANDS, CONFIG, VIEWS } from "./constants";
 import { IssueItem } from "./utils/treeItems";
 import {
-	generateMarker,
+	generateMarkerHandler,
 	generateMarkersHandler,
 	refreshHandler,
 } from "./handlers/commandHandlers";
@@ -66,7 +66,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		vscode.commands.registerCommand(
 			COMMANDS.GENERATE_MARKER,
-			async (item: IssueItem) => generateMarker(item, provider)
+			async (item: IssueItem) => generateMarkerHandler(item, provider)
 		),
 
 		vscode.commands.registerCommand(COMMANDS.GENERATE_MARKERS, async () =>

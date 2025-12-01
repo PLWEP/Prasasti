@@ -118,4 +118,11 @@ export class PrasastiDataManager {
 		this.docItems = tempDocs;
 		this.onDidChangeData.fire();
 	}
+
+	public async removeMarkerItem(item: IssueItem) {
+		this.markerItems = this.markerItems.filter(
+			(i) => i.resourceUri.fsPath !== item.resourceUri.fsPath
+		);
+		this.onDidChangeData.fire();
+	}
 }

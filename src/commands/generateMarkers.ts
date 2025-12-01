@@ -7,6 +7,7 @@ import {
 	CODE_SEPARATOR_REGEX,
 	CONFIG,
 	MARKER_REGEX,
+	OLD_MARKER_REGEX,
 } from "../constants";
 import * as fs from "fs";
 import { CommitInfo } from "../utils/interfaces";
@@ -106,27 +107,65 @@ export async function generateMarkers(uri: vscode.Uri) {
 		};
 
 		for (const lineData of blameData) {
+			let content = lineData.content || "";
+
 			if (!headerPassed) {
-				annotatedLines.push(lineData.content || "");
-				if (CODE_SEPARATOR_REGEX.test(lineData.content || "")) {
+				annotatedLines.push(content);
+				if (CODE_SEPARATOR_REGEX.test(content)) {
 					headerPassed = true;
 				}
 				continue;
 			}
 
-			if (!lineData.content || lineData.content.trim() === "") {
+			if (
+				content.trim().startsWith("-- Start [") ||
+				content.trim().startsWith("-- End [")
+			) {
+				if (OLD_MARKER_REGEX.test(content)) {
+					continue;
+				}
+			}
+
+			if (content.includes("-- [")) {
+				content = content
+					.replace(/--\s*\[(?:ADD|MOD)-\d{6}-\d+\].*$/, "")
+					.trimEnd();
+			}
+
+			if (content.trim() === "") {
 				flushBlock();
-				annotatedLines.push(lineData.content || "");
+				annotatedLines.push("");
 				continue;
 			}
 
-			const commitInfo = lineData.hash
+			if (content.includes("----")) {
+				flushBlock();
+				annotatedLines.push(content);
+				continue;
+			}
+
+			let commitInfo = lineData.hash
 				? commitMap.get(lineData.hash)
 				: undefined;
+
+			let preservedLabel = null;
+			let preservedAuthor = null;
+
+			if (!commitInfo && markerScanOption !== "Full Scan") {
+				const originalContent = lineData.content || "";
+				const match = originalContent.match(
+					/\[((?:ADD|MOD)-\d{6}-\d+)\]\s*(\w+)/
+				);
+				if (match) {
+					preservedLabel = match[1];
+					preservedAuthor = match[2];
+				}
+			}
+
+			const finalLabel = commitInfo ? commitInfo.label : preservedLabel;
 			const finalAuthor = commitInfo
 				? commitInfo.author
-				: lineData.blameAuthor || "Unknown";
-			const finalLabel = commitInfo ? commitInfo.label : null;
+				: preservedAuthor || lineData.blameAuthor || "Unknown";
 
 			const currentKey = finalLabel
 				? `${finalLabel}|${finalAuthor}`
@@ -140,7 +179,7 @@ export async function generateMarkers(uri: vscode.Uri) {
 					: null;
 			}
 
-			currentBlock.lines.push(lineData.content || "");
+			currentBlock.lines.push(content);
 		}
 
 		flushBlock();

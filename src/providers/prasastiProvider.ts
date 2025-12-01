@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { CategoryItem } from "../utils/treeItems";
+import { CategoryItem, IssueItem } from "../utils/treeItems";
 import { PrasastiDataManager } from "../managers/dataManager";
 
 export class PrasastiProvider
@@ -42,5 +42,8 @@ export class PrasastiProvider
 	}
 	getDocFiles() {
 		return this.manager.docItems;
+	}
+	removeMarkerFile(item: IssueItem) {
+		this.manager.removeMarkerItem(item);
 	}
 }

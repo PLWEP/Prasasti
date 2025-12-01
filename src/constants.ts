@@ -29,3 +29,5 @@ export const LINE_LIMIT_THRESHOLD = 600;
 export const CODE_SEPARATOR = "layer Cust;";
 export const MARKER_REGEX = /--\s*(?:20)?(\d{6})/g;
 export const CODE_SEPARATOR_REGEX = /layer\s+\w+\s*;/i;
+export const OLD_MARKER_REGEX =
+	/--\s*(?:Start|End)?\s*\[(?:ADD|MOD)-\d{6}-\d+\]\s*[\w\s]+/i;
