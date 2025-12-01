@@ -2,8 +2,8 @@ export const COMMANDS = {
 	REFRESH: "prasasti.refresh",
 	GENERATE_ALL_DOCS: "prasasti.generateAll",
 	GENERATE_SINGLE_DOC: "prasasti.generateSingle",
-	FIX_ALL_MARKERS: "prasasti.fixAllMarkers",
-	FIX_SINGLE_MARKER: "prasasti.fixMarker",
+	GENERATE_MARKERS: "prasasti.generateMarkers",
+	GENERATE_MARKER: "prasasti.generateMarker",
 };
 
 export const VIEWS = {

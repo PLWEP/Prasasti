@@ -70,6 +70,7 @@ export class PrasastiDataManager {
 					)
 				);
 			}
+			tempMarker.sort();
 		}
 		Logger.info(
 			`Found ${tempMarker.length} files need to generate marker...`,
@@ -106,6 +107,7 @@ export class PrasastiDataManager {
 					);
 				}
 			}
+			tempDocs.sort();
 		}
 		Logger.info(
 			`Found ${tempDocs.length} files need to generate documentation...`,

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PrasastiProvider } from "../providers/issueProvider";
+import { PrasastiProvider } from "../providers/prasastiProvider";
 import { runAiScriptForFile } from "../services/fixService";
 import { getApiKey, promptToOpenSettings } from "../utils/config";
 import { Logger } from "../utils/logger";

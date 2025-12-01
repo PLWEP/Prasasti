@@ -38,9 +38,9 @@ export class PrasastiProvider
 		this.manager.scanWorkspace();
 	}
 	getMarkerFiles() {
-		return this.manager.markerItems.sort();
+		return this.manager.markerItems;
 	}
 	getDocFiles() {
-		return this.manager.docItems.sort();
+		return this.manager.docItems;
 	}
 }

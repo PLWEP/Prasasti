@@ -49,20 +49,20 @@
 				"shortTitle": "Regenerate"
 			},
 			{
-				"command": "prasasti.fixAllMarkers",
-				"title": "Fix All Markers",
-				"icon": "$(tag-add)"
+				"command": "prasasti.generateMarkers",
+				"title": "Prasasti: Generate All Markers",
+				"icon": "$(regex)"
 			},
 			{
-				"command": "prasasti.fixMarker",
-				"title": "Add Markers",
-				"icon": "$(tag-add)"
+				"command": "prasasti.generateMarker",
+				"title": "Prasasti: Generate Marker",
+				"icon": "$(regex)"
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
-					"command": "prasasti.fixAllMarkers",
+					"command": "prasasti.generateMarkers",
 					"when": "view == prasasti.problems",
 					"group": "navigation@1"
 				},
@@ -79,7 +79,7 @@
 			],
 			"view/item/context": [
 				{
-					"command": "prasasti.fixMarker",
+					"command": "prasasti.generateMarker",
 					"when": "view == prasasti.problems && viewItem == marker",
 					"group": "inline"
 				},
