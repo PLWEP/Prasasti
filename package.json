@@ -1,30 +1,19 @@
 {
 	"name": "prasasti",
 	"displayName": "Prasasti",
-	"description": "Automate source code documentation using AI (Gemini).",
-	"version": "2.0.0",
+	"description": "Automate IFS source code documentation.",
+	"version": "1.0.0",
 	"publisher": "PLWEP",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/PLWEP/prasasti"
 	},
-	"keywords": [
-		"documentation",
-		"ai",
-		"gemini",
-		"plsql",
-		"automation"
-	],
 	"engines": {
 		"vscode": "^1.106.1"
 	},
-	"categories": [
-		"Programming Languages",
-		"Machine Learning",
-		"Other"
-	],
 	"activationEvents": [
+		"workspaceContains:**/.ini",
 		"onStartupFinished",
 		"onView:prasasti-explorer"
 	],
@@ -51,12 +40,12 @@
 			{
 				"command": "prasasti.generateMarkers",
 				"title": "Prasasti: Generate All Markers",
-				"icon": "$(regex)"
+				"icon": "$(quote)"
 			},
 			{
 				"command": "prasasti.generateMarker",
 				"title": "Prasasti: Generate Marker",
-				"icon": "$(regex)"
+				"icon": "$(quote)"
 			}
 		],
 		"menus": {
@@ -158,9 +147,21 @@
 				},
 				"prasasti.behavior.markersScan": {
 					"type": "string",
+					"enum": [
+						"Max Scan",
+						"Full Scan"
+					],
 					"default": "Max Scan",
 					"description": "Opsi scan marker Max Scan / Full Scan.",
-					"order": 340
+					"order": 340,
+					"markdownEnumDescriptions": [
+						"Max Scan",
+						"Full Scan"
+					],
+					"enumItemLabels": [
+						"Max",
+						"Full"
+					]
 				}
 			}
 		}
