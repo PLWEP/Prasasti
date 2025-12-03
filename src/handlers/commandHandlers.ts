@@ -1,25 +1,25 @@
-import { WebviewProvider } from "../providers/webViewProvider";
 import * as vscode from "vscode";
 import { Logger } from "../utils/logger";
 import { generateMarker } from "../commands/generateMarker";
 import { IssueItem } from "../utils/treeItems";
+import { DataManager } from "../managers/dataManager";
 
-export function refreshHandler(provider: WebviewProvider) {
-	provider.refresh();
+export function refreshHandler() {
+	const manager = DataManager.getInstance();
+	manager.scanWorkspace();
 }
 
-export async function generateMarkerHandler(
-	item: IssueItem,
-	provider: WebviewProvider
-) {
+export async function generateMarkerHandler(item: IssueItem) {
+	const manager = DataManager.getInstance();
 	await runWithProgress("Generating Markers...", async () => {
 		await generateMarker(item.resourceUri);
-		provider.removeMarkerFile(item);
+		manager.removeMarkerItem(item);
 	});
 }
 
-export async function generateMarkersHandler(provider: WebviewProvider) {
-	const items = provider.getMarkerFiles();
+export async function generateMarkersHandler() {
+	const manager = DataManager.getInstance();
+	const items = manager.markerItems;
 	if (items.length === 0) {
 		return vscode.window.showInformationMessage("No missing markers.");
 	}
@@ -27,7 +27,7 @@ export async function generateMarkersHandler(provider: WebviewProvider) {
 		await runBatch("Fixing Markers", items, async (item) =>
 			generateMarker(item.resourceUri)
 		);
-		provider.refresh();
+		manager.scanWorkspace();
 	}
 }
 

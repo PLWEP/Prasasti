@@ -7,23 +7,18 @@ import {
 	refreshHandler,
 } from "./handlers/commandHandlers";
 import { WebviewProvider } from "./providers/webViewProvider";
+import { DataManager } from "./managers/dataManager";
 
 export function activate(context: vscode.ExtensionContext) {
+	const manager = DataManager.getInstance();
 	const provider = new WebviewProvider(context.extensionUri);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(VIEWS.WEB_VIEW, provider)
 	);
 
-	// provider.onDidChangeTreeData(() => {
-	// 	const total =
-	// 		provider.getMarkerFiles().length + provider.getDocFiles().length;
-	// 	treeView.badge =
-	// 		total > 0 ? { value: total, tooltip: "Issues found" } : undefined;
-	// });
-
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.REFRESH, () =>
-			refreshHandler(provider)
+			refreshHandler()
 		),
 
 		// vscode.commands.registerCommand(
@@ -64,15 +59,15 @@ export function activate(context: vscode.ExtensionContext) {
 
 		vscode.commands.registerCommand(
 			COMMANDS.GENERATE_MARKER,
-			async (item: IssueItem) => generateMarkerHandler(item, provider)
+			async (item: IssueItem) => generateMarkerHandler(item)
 		),
 
 		vscode.commands.registerCommand(COMMANDS.GENERATE_MARKERS, async () =>
-			generateMarkersHandler(provider)
+			generateMarkersHandler()
 		)
 	);
 
-	setTimeout(() => provider.refresh(), 1000);
+	setTimeout(() => manager.scanWorkspace(), 1000);
 }
 
 function getApiKey() {

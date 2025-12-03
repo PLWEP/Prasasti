@@ -10,22 +10,6 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 
 	constructor(private readonly _extensionUri: vscode.Uri) {}
 
-	public refresh() {
-		this.manager.scanWorkspace();
-	}
-
-	public removeMarkerFile(item: IssueItem) {
-		this.manager.removeMarkerItem(item);
-	}
-
-	public getMarkerFiles() {
-		return this.manager.markerItems;
-	}
-
-	public getDocFiles() {
-		return this.manager.docItems;
-	}
-
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		context: vscode.WebviewViewResolveContext,
@@ -38,9 +22,11 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 		};
 
 		this._updateHtml();
+		this._updateBadge();
 
 		this.manager.onDidChangeData.event(() => {
 			this._updateHtml();
+			this._updateBadge();
 		});
 
 		webviewView.webview.onDidReceiveMessage(async (data) => {
@@ -71,6 +57,24 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 				);
 			}
 		});
+	}
+
+	private _updateBadge() {
+		if (!this._view) {
+			return;
+		}
+
+		const total =
+			this.manager.markerItems.length + this.manager.docItems.length;
+
+		if (total > 0) {
+			this._view.badge = {
+				value: total,
+				tooltip: `${total} issues found`,
+			};
+		} else {
+			this._view.badge = undefined;
+		}
 	}
 
 	private _updateHtml() {
