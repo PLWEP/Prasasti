@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import { DataManager } from "../managers/dataManager";
-import { IssueItem } from "../utils/treeItems";
 import * as path from "path";
 import { COMMANDS } from "../constants";
+import { ListItem } from "../utils/interfaces";
 
 export class WebviewProvider implements vscode.WebviewViewProvider {
 	private manager = DataManager.getInstance();
@@ -86,7 +86,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 		this._view.webview.html = this._buildHtml(markers, docs);
 	}
 
-	private _buildHtml(markers: IssueItem[], docs: IssueItem[]): string {
+	private _buildHtml(markers: ListItem[], docs: ListItem[]): string {
 		const styles = this._getStyles();
 		const script = this._getScript();
 		const icons = this._getIcons();
@@ -130,34 +130,25 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         </html>`;
 	}
 
-	private _renderList(items: IssueItem[], icons: any): string {
+	private _renderList(items: ListItem[], icons: any): string {
 		if (items.length === 0) {
 			return `<div class="empty-state">No issues found.</div>`;
 		}
 		return items.map((item) => this._renderItem(item, icons)).join("");
 	}
 
-	private _renderItem(item: IssueItem, icons: any): string {
+	private _renderItem(item: ListItem, icons: any): string {
 		const filePath = item.resourceUri.fsPath;
 		const fileName = path.basename(filePath);
 
-		let rawReason = item.tooltip || item.description || "";
-		if (typeof rawReason !== "string") {
-			rawReason = rawReason.toString();
-		}
-		const cleanReason = rawReason.replace(
-			/^(Missing Markers:|Outdated Docs:|Missing Header:)\s*/i,
-			""
-		);
-
 		return `
-        <div class="item" data-path="${filePath}" title="${cleanReason}">
+        <div class="item" data-path="${filePath}" title="${item.reason}">
             <div class="icon-container">${icons.file}</div>
             <div class="content">
                 <div class="file-header">
                     <span class="filename">${fileName}</span>
                     </div>
-                <div class="issue-reason">${cleanReason}</div>
+                <div class="issue-reason">${item.reason}</div>
             </div>
             <button class="action-btn" title="Run Command">${icons.action}</button>
         </div>`;

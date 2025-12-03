@@ -1,15 +1,14 @@
 import { scanService } from "../services/scanService";
 import { CONFIG } from "../constants";
 import { Logger } from "../utils/logger";
-import { DocStatus } from "../utils/enums";
-import { IssueItem } from "../utils/treeItems";
 import * as vscode from "vscode";
+import { ListItem } from "../utils/interfaces";
 
 export class DataManager {
 	private static instance: DataManager;
 	public readonly onDidChangeData = new vscode.EventEmitter<void>();
-	public markerItems: IssueItem[] = [];
-	public docItems: IssueItem[] = [];
+	public markerItems: ListItem[] = [];
+	public docItems: ListItem[] = [];
 
 	private constructor() {}
 	public static getInstance() {
@@ -30,11 +29,11 @@ export class DataManager {
 			config.get<string>(CONFIG.KEYS.INCLUDE_MARKERS) ||
 			"**/*.{plsql,plsvc}";
 		const skip = config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
-		const markersScanOption =
-			config.get<string>(CONFIG.KEYS.MARKER_SCAN) || "Max Scan";
+		const fileScanOption =
+			config.get<string>(CONFIG.KEYS.FILE_SCAN) || "Max Scan";
 
-		const tempMarker: IssueItem[] = [];
-		const tempDocs: IssueItem[] = [];
+		const tempMarker: ListItem[] = [];
+		const tempDocs: ListItem[] = [];
 
 		Logger.info("Scanning Uncommit Files...", "Provider");
 		const skipUncommitFiles: string[] =
@@ -45,7 +44,7 @@ export class DataManager {
 		);
 
 		Logger.info(
-			`Scanning files with option: ${markersScanOption}...`,
+			`Scanning files with option: ${fileScanOption}...`,
 			"Provider"
 		);
 		const markerFiles = await vscode.workspace.findFiles(patternMarkers);
@@ -54,23 +53,20 @@ export class DataManager {
 			if (skipUncommitFiles.includes(fileName)) {
 				continue;
 			}
-			const res = await scanService.scanMarkerFiles(
+			const res = await scanService.scanFiles(
 				uri,
 				skip,
-				markersScanOption
+				fileScanOption,
+				"Marker"
 			);
-			if (res && res.status === DocStatus.MISSING_MARKERS) {
-				tempMarker.push(
-					new IssueItem(
-						uri,
-						"Missing Markers",
-						"error",
-						res.reason,
-						"marker"
-					)
-				);
+			if (res) {
+				tempMarker.push({
+					resourceUri: uri,
+					label: "Missing Markers",
+					reason: res.reason,
+					contextType: "marker",
+				});
 			}
-			tempMarker.sort();
 		}
 		Logger.info(
 			`Found ${tempMarker.length} files need to generate marker...`,
@@ -83,29 +79,19 @@ export class DataManager {
 			if (skipUncommitFiles.includes(fileName)) {
 				continue;
 			}
-			const res = await scanService.scanDocumentationFiles(uri, skip);
+			const res = await scanService.scanFiles(
+				uri,
+				skip,
+				fileScanOption,
+				"Documentation"
+			);
 			if (res) {
-				if (res.status === DocStatus.OUTDATED) {
-					tempDocs.push(
-						new IssueItem(
-							uri,
-							"Outdated Docs",
-							"warning",
-							res.reason,
-							"docs"
-						)
-					);
-				} else if (res.status === DocStatus.NO_HEADER) {
-					tempDocs.push(
-						new IssueItem(
-							uri,
-							"Missing Header",
-							"error",
-							res.reason,
-							"docs"
-						)
-					);
-				}
+				tempDocs.push({
+					resourceUri: uri,
+					label: "Missing Documentation",
+					reason: res.reason,
+					contextType: "documentation",
+				});
 			}
 			tempDocs.sort();
 		}
@@ -119,7 +105,7 @@ export class DataManager {
 		this.onDidChangeData.fire();
 	}
 
-	public async removeMarkerItem(item: IssueItem) {
+	public async removeMarkerItem(item: ListItem) {
 		this.markerItems = this.markerItems.filter(
 			(i) => i.resourceUri.fsPath !== item.resourceUri.fsPath
 		);

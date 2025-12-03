@@ -146,14 +146,14 @@
 					"description": "Jumlah retry jika terkena Rate Limit (429).",
 					"order": 30
 				},
-				"prasasti.behavior.markersScan": {
+				"prasasti.behavior.fileScan": {
 					"type": "string",
 					"enum": [
 						"Max Scan",
 						"Full Scan"
 					],
 					"default": "Max Scan",
-					"description": "Opsi scan marker Max Scan / Full Scan.",
+					"description": "Opsi scan file Max Scan / Full Scan.",
 					"order": 340,
 					"markdownEnumDescriptions": [
 						"Max Scan",

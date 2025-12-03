@@ -15,8 +15,8 @@ import { CommitInfo } from "../utils/interfaces";
 export async function generateMarker(uri: vscode.Uri) {
 	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
 	const skip = config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
-	const markerScanOption =
-		config.get<string>(CONFIG.KEYS.MARKER_SCAN) || "Full Scan";
+	const fileScanOption =
+		config.get<string>(CONFIG.KEYS.FILE_SCAN) || "Full Scan";
 
 	const filePath = uri.fsPath;
 	const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
@@ -40,7 +40,7 @@ export async function generateMarker(uri: vscode.Uri) {
 				? fileDatesList[fileDatesList.length - 1]
 				: undefined;
 
-		if (markerScanOption === "Full Scan" || !lastDate) {
+		if (fileScanOption === "Full Scan" || !lastDate) {
 			parsedCommits = await GitService.getMarkerDiff(
 				filePath,
 				root,
@@ -151,7 +151,7 @@ export async function generateMarker(uri: vscode.Uri) {
 			let preservedLabel = null;
 			let preservedAuthor = null;
 
-			if (!commitInfo && markerScanOption !== "Full Scan") {
+			if (!commitInfo && fileScanOption !== "Full Scan") {
 				const originalContent = lineData.content || "";
 				const match = originalContent.match(
 					/\[((?:ADD|MOD)-\d{6}-\d+)\]\s*(\w+)/

@@ -1,4 +1,3 @@
-import { DocStatus } from "../utils/enums";
 import { Uri } from "vscode";
 
 export interface HistoryEntry {
@@ -18,8 +17,7 @@ export interface MarkerRange {
 	end: number;
 }
 
-export interface Result {
-	status: DocStatus;
+export interface FileResult {
 	reason: string;
 	resourceUri: Uri;
 }
@@ -35,4 +33,11 @@ export interface BlameInfo {
 	hash?: string;
 	blameAuthor?: string;
 	content?: string;
+}
+
+export interface ListItem {
+	resourceUri: Uri;
+	label: string;
+	reason: string;
+	contextType: "marker" | "documentation";
 }

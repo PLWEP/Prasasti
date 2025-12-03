@@ -21,7 +21,7 @@ export const CONFIG = {
 		SKIP_KEYWORDS: "files.gitSkipKeywords",
 		AUTO_APPLY: "behavior.autoApply",
 		RETRIES: "network.maxRetries",
-		MARKER_SCAN: "behavior.markersScan",
+		FILE_SCAN: "behavior.fileScan",
 	},
 };
 

@@ -1,15 +1,12 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PrasastiProvider } from "../providers/prasastiProvider";
 import { runAiScriptForFile } from "../services/fixService";
 import { getApiKey, promptToOpenSettings } from "../utils/config";
 import { Logger } from "../utils/logger";
 import { DataManager } from "../managers/dataManager";
 
-export async function handleGenerateAll(
-	dataManager: DataManager,
-	provider: PrasastiProvider
-) {
+export async function handleGenerateAll(dataManager: DataManager) {
+	const manager = DataManager.getInstance();
 	const apiKey = getApiKey();
 	if (!apiKey) {
 		return promptToOpenSettings("Gemini API Key is missing.");
@@ -70,7 +67,7 @@ export async function handleGenerateAll(
 				}
 				processed++;
 			}
-			provider.refresh();
+			manager.scanWorkspace();
 			vscode.window.showInformationMessage(
 				`Completed! Processed ${processed} files.`
 			);
@@ -78,10 +75,8 @@ export async function handleGenerateAll(
 	);
 }
 
-export async function handleGenerateSingle(
-	item: any,
-	provider: PrasastiProvider
-) {
+export async function handleGenerateSingle(item: any) {
+	const manager = DataManager.getInstance();
 	if (!item || !item.resourceUri) {
 		return;
 	}
@@ -109,7 +104,7 @@ export async function handleGenerateSingle(
 						wsFolder.uri.fsPath,
 						apiKey
 					);
-					provider.refresh();
+					manager.scanWorkspace();
 					vscode.window.showInformationMessage(`Updated ${fileName}`);
 				} catch (e: any) {
 					vscode.window.showErrorMessage(`Error: ${e.message}`);

@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { COMMANDS, CONFIG, VIEWS } from "./constants";
-import { IssueItem } from "./utils/treeItems";
 import {
 	generateMarkerHandler,
 	generateMarkersHandler,
@@ -8,6 +7,7 @@ import {
 } from "./handlers/commandHandlers";
 import { WebviewProvider } from "./providers/webViewProvider";
 import { DataManager } from "./managers/dataManager";
+import { ListItem } from "./utils/interfaces";
 
 export function activate(context: vscode.ExtensionContext) {
 	const manager = DataManager.getInstance();
@@ -59,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		vscode.commands.registerCommand(
 			COMMANDS.GENERATE_MARKER,
-			async (item: IssueItem) => generateMarkerHandler(item)
+			async (item: ListItem) => generateMarkerHandler(item)
 		),
 
 		vscode.commands.registerCommand(COMMANDS.GENERATE_MARKERS, async () =>

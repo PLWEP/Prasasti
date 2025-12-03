@@ -34,7 +34,7 @@ export class GitService {
 		}
 	}
 
-	static async getMarkerDate(
+	static async getGitDates(
 		filePath: string,
 		root: string,
 		skip: string[],

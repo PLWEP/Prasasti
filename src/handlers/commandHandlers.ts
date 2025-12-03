@@ -1,15 +1,15 @@
 import * as vscode from "vscode";
 import { Logger } from "../utils/logger";
 import { generateMarker } from "../commands/generateMarker";
-import { IssueItem } from "../utils/treeItems";
 import { DataManager } from "../managers/dataManager";
+import { ListItem } from "../utils/interfaces";
 
 export function refreshHandler() {
 	const manager = DataManager.getInstance();
 	manager.scanWorkspace();
 }
 
-export async function generateMarkerHandler(item: IssueItem) {
+export async function generateMarkerHandler(item: ListItem) {
 	const manager = DataManager.getInstance();
 	await runWithProgress("Generating Markers...", async () => {
 		await generateMarker(item.resourceUri);
@@ -58,8 +58,8 @@ async function confirmAction(count: number) {
 
 async function runBatch(
 	title: string,
-	items: IssueItem[],
-	task: (item: IssueItem) => Promise<void>
+	items: ListItem[],
+	task: (item: ListItem) => Promise<void>
 ) {
 	await vscode.window.withProgress(
 		{
