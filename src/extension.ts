@@ -1,7 +1,4 @@
 import * as vscode from "vscode";
-import { PrasastiProvider } from "./providers/prasastiProvider";
-import { generateDocsForFile } from "./commands/generateDocs";
-import { generateMarkers } from "./commands/generateMarkers";
 import { COMMANDS, CONFIG, VIEWS } from "./constants";
 import { IssueItem } from "./utils/treeItems";
 import {
@@ -9,19 +6,20 @@ import {
 	generateMarkersHandler,
 	refreshHandler,
 } from "./handlers/commandHandlers";
+import { WebviewProvider } from "./providers/webViewProvider";
 
 export function activate(context: vscode.ExtensionContext) {
-	const provider = new PrasastiProvider();
-	const treeView = vscode.window.createTreeView(VIEWS.PROBLEMS, {
-		treeDataProvider: provider,
-	});
+	const provider = new WebviewProvider(context.extensionUri);
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(VIEWS.WEB_VIEW, provider)
+	);
 
-	provider.onDidChangeTreeData(() => {
-		const total =
-			provider.getMarkerFiles().length + provider.getDocFiles().length;
-		treeView.badge =
-			total > 0 ? { value: total, tooltip: "Issues found" } : undefined;
-	});
+	// provider.onDidChangeTreeData(() => {
+	// 	const total =
+	// 		provider.getMarkerFiles().length + provider.getDocFiles().length;
+	// 	treeView.badge =
+	// 		total > 0 ? { value: total, tooltip: "Issues found" } : undefined;
+	// });
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.REFRESH, () =>

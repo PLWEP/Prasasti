@@ -4,10 +4,10 @@ import { PrasastiProvider } from "../providers/prasastiProvider";
 import { runAiScriptForFile } from "../services/fixService";
 import { getApiKey, promptToOpenSettings } from "../utils/config";
 import { Logger } from "../utils/logger";
-import { PrasastiDataManager } from "../managers/dataManager";
+import { DataManager } from "../managers/dataManager";
 
 export async function handleGenerateAll(
-	dataManager: PrasastiDataManager,
+	dataManager: DataManager,
 	provider: PrasastiProvider
 ) {
 	const apiKey = getApiKey();

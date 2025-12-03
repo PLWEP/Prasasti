@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
 import { CategoryItem, IssueItem } from "../utils/treeItems";
-import { PrasastiDataManager } from "../managers/dataManager";
+import { DataManager } from "../managers/dataManager";
 
 export class PrasastiProvider
 	implements vscode.TreeDataProvider<vscode.TreeItem>
 {
-	private manager = PrasastiDataManager.getInstance();
+	private manager = DataManager.getInstance();
 	readonly onDidChangeTreeData = this.manager.onDidChangeData.event;
 
 	getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

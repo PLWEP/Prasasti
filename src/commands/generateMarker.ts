@@ -12,7 +12,7 @@ import {
 import * as fs from "fs";
 import { CommitInfo } from "../utils/interfaces";
 
-export async function generateMarkers(uri: vscode.Uri) {
+export async function generateMarker(uri: vscode.Uri) {
 	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
 	const skip = config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
 	const markerScanOption =
@@ -185,7 +185,6 @@ export async function generateMarkers(uri: vscode.Uri) {
 		flushBlock();
 
 		fs.writeFileSync(filePath, annotatedLines.join("\n"));
-		vscode.window.showInformationMessage("Markers applied!");
 	} catch (e: any) {
 		Logger.error("Failed to generate markers", "Markers", e);
 		vscode.window.showErrorMessage(

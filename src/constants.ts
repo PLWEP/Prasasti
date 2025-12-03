@@ -7,7 +7,8 @@ export const COMMANDS = {
 };
 
 export const VIEWS = {
-	PROBLEMS: "prasasti.problems",
+	TREE_VIEW: "prasasti.treeView",
+	WEB_VIEW: "prasasti.webView",
 };
 
 export const CONFIG = {

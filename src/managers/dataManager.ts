@@ -5,18 +5,18 @@ import { DocStatus } from "../utils/enums";
 import { IssueItem } from "../utils/treeItems";
 import * as vscode from "vscode";
 
-export class PrasastiDataManager {
-	private static instance: PrasastiDataManager;
+export class DataManager {
+	private static instance: DataManager;
 	public readonly onDidChangeData = new vscode.EventEmitter<void>();
 	public markerItems: IssueItem[] = [];
 	public docItems: IssueItem[] = [];
 
 	private constructor() {}
 	public static getInstance() {
-		if (!PrasastiDataManager.instance) {
-			PrasastiDataManager.instance = new PrasastiDataManager();
+		if (!DataManager.instance) {
+			DataManager.instance = new DataManager();
 		}
-		return PrasastiDataManager.instance;
+		return DataManager.instance;
 	}
 
 	public async scanWorkspace() {

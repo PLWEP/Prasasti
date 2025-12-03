@@ -52,17 +52,17 @@
 			"view/title": [
 				{
 					"command": "prasasti.generateMarkers",
-					"when": "view == prasasti.problems",
+					"when": "view == prasasti.webView",
 					"group": "navigation@1"
 				},
 				{
 					"command": "prasasti.generateAll",
-					"when": "view == prasasti.problems",
+					"when": "view == prasasti.webView",
 					"group": "navigation@2"
 				},
 				{
 					"command": "prasasti.refresh",
-					"when": "view == prasasti.problems",
+					"when": "view == prasasti.webView",
 					"group": "navigation@3"
 				}
 			],
@@ -91,9 +91,10 @@
 		"views": {
 			"prasasti-explorer": [
 				{
-					"id": "prasasti.problems",
+					"id": "prasasti.webView",
 					"name": "",
-					"icon": "$(warning)"
+					"icon": "$(warning)",
+					"type": "webview"
 				}
 			]
 		},

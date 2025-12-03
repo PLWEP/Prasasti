@@ -6,7 +6,7 @@ import { HEADER_REGEX } from "../constants";
 import { Logger } from "../utils/logger";
 import { DocStatus } from "../utils/enums";
 import { Result } from "../utils/interfaces";
-import { getMarkerDate } from "../commands/generateMarkers";
+import { getMarkerDate } from "../commands/generateMarker";
 
 export class scanService {
 	static async scanUncommitFiles(): Promise<string[]> {
