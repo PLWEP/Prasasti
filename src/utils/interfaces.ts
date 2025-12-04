@@ -41,3 +41,11 @@ export interface ListItem {
 	reason: string;
 	contextType: "marker" | "documentation";
 }
+
+export interface MarkerRule {
+	filePattern: string;
+	startRegex: string;
+	skipKeywords?: string[];
+	message?: string;
+	color?: string;
+}

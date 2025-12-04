@@ -10,13 +10,15 @@ import {
 	OLD_MARKER_REGEX,
 } from "../constants";
 import * as fs from "fs";
-import { CommitInfo } from "../utils/interfaces";
+import { CommitInfo, MarkerRule } from "../utils/interfaces";
+import { minimatch } from "minimatch";
 
 export async function generateMarker(uri: vscode.Uri) {
 	const config = vscode.workspace.getConfiguration(CONFIG.SECTION);
 	const skip = config.get<string[]>(CONFIG.KEYS.SKIP_KEYWORDS) || [];
 	const fileScanOption =
 		config.get<string>(CONFIG.KEYS.FILE_SCAN) || "Full Scan";
+	const rules = config.get<MarkerRule[]>(CONFIG.KEYS.RULES) || [];
 
 	const filePath = uri.fsPath;
 	const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
@@ -25,7 +27,32 @@ export async function generateMarker(uri: vscode.Uri) {
 	}
 
 	const root = wsFolder.uri.fsPath;
+	const relativePath = path.relative(root, filePath);
 	Logger.info(`Generate Markers for ${path.basename(filePath)}`, "Markers");
+
+	const activeRule = rules.find((rule) =>
+		minimatch(relativePath, rule.filePattern)
+	);
+	if (!activeRule) {
+		Logger.info(`No matching rule found for ${relativePath}`, "Markers");
+		return;
+	}
+	Logger.info(
+		`Applying rule: ${activeRule.message || activeRule.filePattern}`,
+		"Markers"
+	);
+	let headerStopRegex: RegExp | null = null;
+	try {
+		if (activeRule.startRegex) {
+			headerStopRegex = new RegExp(activeRule.startRegex, "i");
+		}
+	} catch (e) {
+		vscode.window.showErrorMessage(
+			`Invalid Regex in rule: ${activeRule.startRegex}`
+		);
+		return;
+	}
+	const inlineSkipKeywords = activeRule.skipKeywords || [];
 
 	try {
 		const commitMap = new Map<string, { label: string; author: string }>();
@@ -70,7 +97,7 @@ export async function generateMarker(uri: vscode.Uri) {
 
 		const blameData = await GitService.getMarkerBlame(filePath, root);
 		const annotatedLines: string[] = [];
-		let headerPassed = false;
+		let headerPassed = !headerStopRegex;
 
 		let currentBlock = {
 			markerKey: null as string | null,
@@ -109,9 +136,9 @@ export async function generateMarker(uri: vscode.Uri) {
 		for (const lineData of blameData) {
 			let content = lineData.content || "";
 
-			if (!headerPassed) {
+			if (!headerPassed && headerStopRegex) {
 				annotatedLines.push(content);
-				if (CODE_SEPARATOR_REGEX.test(content)) {
+				if (headerStopRegex.test(content)) {
 					headerPassed = true;
 				}
 				continue;
@@ -139,6 +166,14 @@ export async function generateMarker(uri: vscode.Uri) {
 			}
 
 			if (content.includes("----")) {
+				flushBlock();
+				annotatedLines.push(content);
+				continue;
+			}
+
+			if (
+				inlineSkipKeywords.some((keyword) => content.includes(keyword))
+			) {
 				flushBlock();
 				annotatedLines.push(content);
 				continue;

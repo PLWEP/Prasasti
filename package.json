@@ -163,6 +163,65 @@
 						"Max",
 						"Full"
 					]
+				},
+				"prasasti.rules": {
+					"type": "array",
+					"default": [
+						{
+							"filePattern": "**/*.{plsql,plsvc,views}",
+							"startRegex": "layer\\s+Cust;",
+							"message": "Custom Layer Area"
+						},
+						{
+							"filePattern": "**/*.{client}",
+							"startRegex": "description\\s+\".*\";",
+							"skipKeywords": [
+								"@Override",
+								"fragment",
+								"navigator",
+								"entry",
+								"}",
+								"page",
+								"label",
+								"execute",
+								"dialog",
+								"@DynamicComponentDependency"
+							],
+							"message": "Projection/Client Logic"
+						},
+						{
+							"filePattern": "**/*.{projection,client}",
+							"startRegex": "category Users;",
+							"skipKeywords": [
+								"@Override",
+								"@DynamicComponentDependency"
+							],
+							"message": "Projection/Client Logic"
+						}
+					],
+					"items": {
+						"type": "object",
+						"properties": {
+							"filePattern": {
+								"type": "string",
+								"description": "Glob pattern file"
+							},
+							"startRegex": {
+								"type": "string",
+								"description": "Regex untuk menemukan baris awal marker"
+							},
+							"skipKeywords": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "Daftar keyword yang jika ditemukan di baris, marker tidak akan dipasang (inline skip)"
+							},
+							"message": {
+								"type": "string"
+							}
+						}
+					}
 				}
 			}
 		}
@@ -182,6 +241,7 @@
 		"test": "vscode-test"
 	},
 	"devDependencies": {
+		"@types/minimatch": "^5.1.2",
 		"@types/mocha": "^10.0.10",
 		"@types/node": "22.x",
 		"@types/sinon": "^21.0.0",
@@ -195,5 +255,8 @@
 		"sinon": "^21.0.0",
 		"typescript": "^5.9.3",
 		"typescript-eslint": "^8.46.3"
+	},
+	"dependencies": {
+		"minimatch": "^10.1.1"
 	}
 }

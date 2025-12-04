@@ -22,6 +22,7 @@ export const CONFIG = {
 		AUTO_APPLY: "behavior.autoApply",
 		RETRIES: "network.maxRetries",
 		FILE_SCAN: "behavior.fileScan",
+		RULES: "rules",
 	},
 };
 
